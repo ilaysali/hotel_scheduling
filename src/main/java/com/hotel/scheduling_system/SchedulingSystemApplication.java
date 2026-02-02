@@ -10,4 +10,5 @@ public class SchedulingSystemApplication {
 		SpringApplication.run(SchedulingSystemApplication.class, args);
 	}
 
+
 }
