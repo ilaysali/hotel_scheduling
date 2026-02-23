@@ -67,11 +67,18 @@ public class ScheduleSolution {
                     int requestedRank = getRoomRank(currentRes.roomType());
                     int assignedRank = getRoomRank(assignedRoom.getType());
                     long nights = ChronoUnit.DAYS.between(currentRes.startDate(), currentRes.endDate());
+                    // העיקרון שלך: Fail-Fast במקום לטאטא מתחת לשטיח
+                    if (nights <= 0) {
+                        throw new IllegalArgumentException(
+                                "CRITICAL ERROR: Reservation ID " + currentRes.id() + " has invalid dates! " +
+                                        "End date (" + currentRes.endDate() + ") cannot be before or equal to Start date (" + currentRes.startDate() + ")."
+                        );
+                    }
 
                     if (assignedRank < requestedRank) {
-                        penalties += (W_DOWNGRADE_PER_NIGHT * nights);
+                        penalties += (W_DOWNGRADE_PER_NIGHT * nights * (requestedRank - assignedRank));
                     } else {
-                        penalties += (W_UPGRADE_PER_NIGHT * nights);
+                        penalties += (W_UPGRADE_PER_NIGHT * nights * (assignedRank - requestedRank));
                     }
                 }
             }

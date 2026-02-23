@@ -1,19 +1,20 @@
 package com.hotel.scheduling_system.view;
 
 import com.hotel.scheduling_system.controller.AppController;
+import com.hotel.scheduling_system.model.Guest;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
+import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +30,6 @@ public class MainView extends VBox {
 
     private Map<Room, List<Reservation>> currentAssignments;
     private List<Reservation> currentUnassigned;
-
-    // הרשימה שתשמור איזה מהשנמוכים המנהל כבר אישר
     private final Set<Reservation> approvedDowngrades = new HashSet<>();
 
     public MainView(AppController appController) {
@@ -64,23 +63,29 @@ public class MainView extends VBox {
         saveBtn.setDisable(true);
         saveBtn.setStyle("-fx-base: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        HBox buttonsBox = new HBox(15, mockBtn, generateBtn, saveBtn);
+        // --- הכפתור החדש ליצירת הזמנה ידנית! ---
+        Button addResBtn = new Button("➕ New Reservation");
+        addResBtn.setStyle("-fx-base: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
+
+        HBox buttonsBox = new HBox(15, mockBtn, generateBtn, saveBtn, addResBtn);
         HBox dashboard = new HBox(20, ganttChart, unassignedPanel);
 
-        // --- לוגיקת האישורים והדחיות ---
+        // --- לוגיקת החלון הקופץ (Dialog) ---
+        addResBtn.setOnAction(e -> openNewReservationDialog());
+
         ganttChart.setOnRejectCallback(rejectedRes -> {
             if (currentAssignments != null && currentUnassigned != null) {
                 for (List<Reservation> roomSchedule : currentAssignments.values()) {
                     if (roomSchedule.remove(rejectedRes)) break;
                 }
                 currentUnassigned.add(rejectedRes);
-                approvedDowngrades.remove(rejectedRes); // ליתר ביטחון ננקה מהאישורים
+                approvedDowngrades.remove(rejectedRes);
                 refreshDashboard();
             }
         });
 
         ganttChart.setOnApproveCallback(approvedRes -> {
-            approvedDowngrades.add(approvedRes); // המנהל לקח אחריות
+            approvedDowngrades.add(approvedRes);
             refreshDashboard();
         });
 
@@ -100,18 +105,23 @@ public class MainView extends VBox {
         generateBtn.setOnAction(event -> {
             try {
                 Map<String, Object> results = appController.onGenerateScheduleClicked();
-
                 currentAssignments = (Map<Room, List<Reservation>>) results.get("ASSIGNMENTS");
                 currentUnassigned = (List<Reservation>) results.get("UNASSIGNED");
                 Double fitnessScore = (Double) results.get("FITNESS_SCORE");
 
-                approvedDowngrades.clear(); // איפוס אישורים לשיבוץ חדש
-
+                approvedDowngrades.clear();
                 refreshDashboard();
 
-                if (fitnessScore != null) {
-                    fitnessLabel.setText(String.format("AI Fitness Score: %,.0f", fitnessScore));
-                }
+                if (fitnessScore != null) fitnessLabel.setText(String.format("AI Fitness Score: %,.0f", fitnessScore));
+            } catch (IllegalArgumentException e) {
+                // תופסים את החריגה הספציפית שיצרנו ומדפיסים אותה למסך!
+                System.err.println("Algorithm halted: " + e.getMessage());
+
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+                errorAlert.setTitle("Data Error");
+                errorAlert.setHeaderText("Algorithm Halted");
+                errorAlert.setContentText(e.getMessage());
+                errorAlert.showAndWait();
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -132,19 +142,94 @@ public class MainView extends VBox {
         getChildren().addAll(headerBox, buttonsBox, dashboard);
     }
 
-    // פונקציית עזר לציור מחדש ובדיקת חסימת כפתור השמירה
     private void refreshDashboard() {
         if (currentAssignments == null) return;
-
-        // מעדכנים את הלוח ובודקים אם נשארו שנמוכים מסוכנים
         boolean hasPendingDowngrades = ganttChart.updateData(currentAssignments, approvedDowngrades);
         unassignedPanel.updateData(currentUnassigned);
+        saveBtn.setDisable(currentAssignments.isEmpty() || hasPendingDowngrades);
+    }
 
-        // פותחים את כפתור השמירה רק אם אין בעיות תלויות
-        if (!currentAssignments.isEmpty() && !hasPendingDowngrades) {
-            saveBtn.setDisable(false);
-        } else {
-            saveBtn.setDisable(true);
+    // הפונקציה שבונה ומציגה את טופס ההזמנה החדשה
+    private void openNewReservationDialog() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Create New Reservation");
+        dialog.setHeaderText("Please fill out the reservation details:");
+
+        // הפיכת תיבת האורחים לתיבת טקסט משולבת (Editable ComboBox)
+        ComboBox<String> guestComboBox = new ComboBox<>();
+        for (Guest g : appController.getAllGuests()) {
+            guestComboBox.getItems().add(g.firstName() + " " + g.lastName());
         }
+        guestComboBox.setEditable(true); // עכשיו המנהל יכול להקליד כל שם שירצה!
+        guestComboBox.setPromptText("Select or type a name...");
+
+        DatePicker startDatePicker = new DatePicker(LocalDate.of(2026, 4, 10));
+        DatePicker endDatePicker = new DatePicker(LocalDate.of(2026, 4, 15));
+
+        ComboBox<String> roomTypeBox = new ComboBox<>();
+        roomTypeBox.getItems().addAll("SINGLE", "DOUBLE", "SUITE");
+        roomTypeBox.setPromptText("Select Room Type...");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10); grid.setVgap(10);
+        grid.add(new Label("Guest Name:"), 0, 0); grid.add(guestComboBox, 1, 0);
+        grid.add(new Label("Start Date:"), 0, 1); grid.add(startDatePicker, 1, 1);
+        grid.add(new Label("End Date:"), 0, 2); grid.add(endDatePicker, 1, 2);
+        grid.add(new Label("Requested Room:"), 0, 3); grid.add(roomTypeBox, 1, 3);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        // === ולידציה שמונעת מהחלון להיסגר במקרה של שגיאה ===
+        final Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        okButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            String guestName = guestComboBox.getValue();
+            String roomType = roomTypeBox.getValue();
+            LocalDate start = startDatePicker.getValue();
+            LocalDate end = endDatePicker.getValue();
+
+            // 1. חסר שם או סוג חדר
+            if (guestName == null || guestName.trim().isEmpty() || roomType == null) {
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+                errorAlert.setTitle("Missing Information");
+                errorAlert.setHeaderText("Validation Failed");
+                errorAlert.setContentText("You must provide a guest name and select a room type.");
+                errorAlert.showAndWait();
+                event.consume(); // מונע מהחלון להיסגר!
+                return;
+            }
+
+            // 2. תאריכים שגויים
+            if (start == null || end == null || !end.isAfter(start)) {
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
+                errorAlert.setTitle("Invalid Dates");
+                errorAlert.setHeaderText("Validation Failed");
+                errorAlert.setContentText("The End Date must be strictly after the Start Date.");
+                errorAlert.showAndWait();
+                event.consume(); // מונע מהחלון להיסגר!
+                return;
+            }
+        });
+
+        // אם הכל עבר תקין, מבצעים את השמירה בפועל
+        dialog.showAndWait().ifPresent(response -> {
+            if (response == ButtonType.OK) {
+                // שולחים את השם לבדיקה - אם הוא חדש הוא יתווסף אוטומטית למסד הנתונים!
+                int guestId = appController.getOrCreateGuest(guestComboBox.getValue());
+
+                appController.createNewReservation(
+                        guestId,
+                        roomTypeBox.getValue(),
+                        startDatePicker.getValue(),
+                        endDatePicker.getValue()
+                );
+
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Reservation Added");
+                alert.setHeaderText(null);
+                alert.setContentText("New reservation added successfully! Click 'Generate Schedule' to see how the AI handles it.");
+                alert.showAndWait();
+            }
+        });
     }
 }
