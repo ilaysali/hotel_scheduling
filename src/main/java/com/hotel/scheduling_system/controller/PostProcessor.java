@@ -11,15 +11,11 @@ import java.util.Map;
 
 public class PostProcessor {
 
-    // Upgraded to accept the Rooms list and return a Map<String, Object>
     public Map<String, Object> process(ScheduleSolution winningSolution, List<Reservation> allReservations, List<Room> rooms) {
         Map<String, Object> result = new HashMap<>();
         List<Reservation> unassignedList = new ArrayList<>();
-
-        // This links the Physical Room to the List of Reservations assigned to it
         Map<Room, List<Reservation>> roomAssignments = new HashMap<>();
 
-        // Initialize a lane for every room, even if it's empty
         for (Room room : rooms) {
             roomAssignments.put(room, new ArrayList<>());
         }
@@ -56,6 +52,10 @@ public class PostProcessor {
 
         result.put("ASSIGNMENTS", roomAssignments);
         result.put("UNASSIGNED", unassignedList);
+
+        // הנה השורה החדשה! מוסיפים את ציון ה-Fitness למילון שחוזר לממשק
+        result.put("FITNESS_SCORE", winningSolution.getFitness());
+
         return result;
     }
 }

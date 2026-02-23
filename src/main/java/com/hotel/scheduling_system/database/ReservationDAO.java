@@ -17,15 +17,18 @@ public class ReservationDAO {
     public List<Reservation> getAllReservations() {
         List<Reservation> reservations = new ArrayList<>();
 
+        // עדכנו את השאילתה כדי לעשות JOIN גם לטבלת Guests ולמשוך את השם המלא!
         String query = """
                 SELECT 
                     r.reservation_id AS id, 
+                    CONCAT(g.first_name, ' ', g.last_name) AS guest_name,
                     rr.start_date, 
                     rr.end_date, 
                     rm.room_type 
                 FROM Reservations r
                 JOIN Reservation_Rooms rr ON r.reservation_id = rr.reservation_id
                 JOIN Rooms rm ON rr.room_id = rm.room_id
+                JOIN Guests g ON r.guest_id = g.guest_id
                 """;
 
         try (Connection conn = DriverManager.getConnection(url, user, password);
@@ -35,6 +38,7 @@ public class ReservationDAO {
             while (rs.next()) {
                 reservations.add(new Reservation(
                         rs.getInt("id"),
+                        rs.getString("guest_name"), // קוראים את השם החדש מה-DB
                         rs.getDate("start_date").toLocalDate(),
                         rs.getDate("end_date").toLocalDate(),
                         RoomType.valueOf(rs.getString("room_type"))
@@ -46,7 +50,6 @@ public class ReservationDAO {
         return reservations;
     }
 
-    // הפונקציה החדשה ששומרת את השיבוץ למסד הנתונים!
     public void updateReservationRoom(int reservationId, int newRoomId) {
         String query = "UPDATE Reservation_Rooms SET room_id = ? WHERE reservation_id = ?";
 

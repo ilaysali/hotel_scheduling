@@ -1,5 +1,6 @@
 package com.hotel.scheduling_system.controller;
 
+import com.hotel.scheduling_system.database.MockDataGenerator;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.service.SchedulingService;
@@ -12,17 +13,24 @@ import java.util.Map;
 public class AppController {
 
     private final SchedulingService schedulingService;
+    private final MockDataGenerator mockDataGenerator;
 
-    public AppController(SchedulingService schedulingService) {
+    // הזרקנו גם את מחולל הנתונים
+    public AppController(SchedulingService schedulingService, MockDataGenerator mockDataGenerator) {
         this.schedulingService = schedulingService;
+        this.mockDataGenerator = mockDataGenerator;
     }
 
     public Map<String, Object> onGenerateScheduleClicked() {
         return schedulingService.generateSchedule();
     }
 
-    // הניתוב החדש עבור כפתור השמירה
     public void onSaveScheduleClicked(Map<Room, List<Reservation>> assignments) {
         schedulingService.saveScheduleToDatabase(assignments);
+    }
+
+    // הפונקציה החדשה שתופעל מהממשק
+    public void onLoadMockDataClicked() {
+        mockDataGenerator.resetAndGenerate();
     }
 }
