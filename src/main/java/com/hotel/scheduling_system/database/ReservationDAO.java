@@ -2,19 +2,31 @@ package com.hotel.scheduling_system.database;
 
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.RoomType;
+import org.springframework.stereotype.Repository;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+@Repository
 public class ReservationDAO {
-    // Configuration properties should ideally be in db_config.properties
     private final String url = "jdbc:mysql://localhost:3306/hotel_db";
     private final String user = "root";
-    private final String password = "password";
+    private final String password = "admin";
 
     public List<Reservation> getAllReservations() {
         List<Reservation> reservations = new ArrayList<>();
-        String query = "SELECT id, start_date, end_date, room_type FROM reservations";
+
+        String query = """
+                SELECT 
+                    r.reservation_id AS id, 
+                    rr.start_date, 
+                    rr.end_date, 
+                    rm.room_type 
+                FROM Reservations r
+                JOIN Reservation_Rooms rr ON r.reservation_id = rr.reservation_id
+                JOIN Rooms rm ON rr.room_id = rm.room_id
+                """;
 
         try (Connection conn = DriverManager.getConnection(url, user, password);
              Statement stmt = conn.createStatement();
@@ -23,8 +35,8 @@ public class ReservationDAO {
             while (rs.next()) {
                 reservations.add(new Reservation(
                         rs.getInt("id"),
-                        rs.getTimestamp("start_date").toLocalDateTime().toLocalDate(),
-                        rs.getTimestamp("end_date").toLocalDateTime().toLocalDate(),
+                        rs.getDate("start_date").toLocalDate(),
+                        rs.getDate("end_date").toLocalDate(),
                         RoomType.valueOf(rs.getString("room_type"))
                 ));
             }
@@ -32,5 +44,21 @@ public class ReservationDAO {
             e.printStackTrace();
         }
         return reservations;
+    }
+
+    // הפונקציה החדשה ששומרת את השיבוץ למסד הנתונים!
+    public void updateReservationRoom(int reservationId, int newRoomId) {
+        String query = "UPDATE Reservation_Rooms SET room_id = ? WHERE reservation_id = ?";
+
+        try (Connection conn = DriverManager.getConnection(url, user, password);
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+
+            pstmt.setInt(1, newRoomId);
+            pstmt.setInt(2, reservationId);
+            pstmt.executeUpdate();
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 }

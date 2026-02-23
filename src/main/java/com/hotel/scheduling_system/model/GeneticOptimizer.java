@@ -9,39 +9,36 @@ public class GeneticOptimizer {
     private List<ScheduleSolution> population = new ArrayList<>();
     private final Random random = new Random();
 
-    public ScheduleSolution solve(List<Reservation> reservations, int numRooms) {
+    // Now accepts List<Room> instead of just the number of rooms
+    public ScheduleSolution solve(List<Reservation> reservations, List<Room> rooms) {
         // 1. Initialization
-        initializePopulation(100, reservations.size(), numRooms);
+        initializePopulation(100, reservations, rooms);
 
         int generation = 0;
-        // 2. Evolution loop with termination criteria (Generation limit)
         while (generation < 500) {
-            evolve(reservations, numRooms);
+            evolve(reservations, rooms);
             generation++;
         }
 
-        // 3. Return the best solution found
         return population.stream()
                 .max(Comparator.comparingDouble(ScheduleSolution::getFitness))
                 .orElse(null);
     }
 
-    private void evolve(List<Reservation> reservations, int numRooms) {
+    private void evolve(List<Reservation> reservations, List<Room> rooms) {
         List<ScheduleSolution> nextGen = new ArrayList<>();
 
-        // Elitism: Preserve the top 2 solutions
         population.sort(Comparator.comparingDouble(ScheduleSolution::getFitness).reversed());
         nextGen.add(new ScheduleSolution(population.get(0).getGenes()));
         nextGen.add(new ScheduleSolution(population.get(1).getGenes()));
 
-        // Fill remaining population with offspring
         while (nextGen.size() < population.size()) {
             ScheduleSolution p1 = tournamentSelection(5);
             ScheduleSolution p2 = tournamentSelection(5);
 
             ScheduleSolution child = crossover(p1, p2);
-            child.mutate(0.01, numRooms);
-            child.calculateFitness(reservations);
+            child.mutate(0.01, rooms);
+            child.calculateFitness(reservations, rooms); // Pass rooms here
             nextGen.add(child);
         }
         this.population = nextGen;
@@ -58,19 +55,21 @@ public class GeneticOptimizer {
     }
 
     private ScheduleSolution crossover(ScheduleSolution p1, ScheduleSolution p2) {
-        int cut = random.nextInt(p1.getGenes().length); // One-Point Crossover
+        int cut = random.nextInt(p1.getGenes().length);
         int[] childGenes = new int[p1.getGenes().length];
         System.arraycopy(p1.getGenes(), 0, childGenes, 0, cut);
         System.arraycopy(p2.getGenes(), cut, childGenes, cut, p1.getGenes().length - cut);
         return new ScheduleSolution(childGenes);
     }
 
-    private void initializePopulation(int size, int resCount, int rooms) {
+    private void initializePopulation(int size, List<Reservation> reservations, List<Room> rooms) {
         for (int i = 0; i < size; i++) {
-            ScheduleSolution sol = new ScheduleSolution(resCount);
-            for (int j = 0; j < resCount; j++) {
-                sol.getGenes()[j] = random.nextInt(rooms) + 1;
+            ScheduleSolution sol = new ScheduleSolution(reservations.size());
+            for (int j = 0; j < reservations.size(); j++) {
+                Room randomRoom = rooms.get(random.nextInt(rooms.size()));
+                sol.getGenes()[j] = randomRoom.getId();
             }
+            sol.calculateFitness(reservations, rooms); // Initialize first fitness score!
             population.add(sol);
         }
     }
