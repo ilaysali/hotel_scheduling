@@ -9,25 +9,78 @@ public class GeneticOptimizer {
     private List<ScheduleSolution> population = new ArrayList<>();
     private final Random random = new Random();
 
-    // Now accepts List<Room> instead of just the number of rooms
+    // הגדרת תנאי העצירה כפי שהוגדרו במסמך האפיון של הפרויקט!
+    private static final int MAX_GENERATIONS = 1000;         // מגבלת דורות
+    private static final long MAX_TIME_MS = 5000;            // מגבלת זמן (5 שניות)
+    private static final int MAX_STAGNATION = 100;           // מגבלת קיפאון
+    private static final double TARGET_FITNESS = 1_000_000.0;// יעד איכות (ציון מושלם)
+
     public ScheduleSolution solve(List<Reservation> reservations, List<Room> rooms) {
-        // 1. Initialization
+        // 1. אתחול
         initializePopulation(100, reservations, rooms);
 
+        long startTime = System.currentTimeMillis();
         int generation = 0;
-        while (generation < 500) {
+        int stagnationCounter = 0;
+        double bestFitnessSoFar = -1;
+
+        ScheduleSolution overallBestSolution = population.get(0);
+
+        // הלולאה החכמה - בקרת עצירה משולבת
+        while (true) {
+            // תנאי 1: מגבלת דורות
+            if (generation >= MAX_GENERATIONS) {
+                System.out.println("Algorithm stopped: Reached generation limit.");
+                break;
+            }
+
+            // תנאי 2: מגבלת זמן (חווית משתמש)
+            if (System.currentTimeMillis() - startTime > MAX_TIME_MS) {
+                System.out.println("Algorithm stopped: Reached time limit.");
+                break;
+            }
+
+            // ביצוע תהליך האבולוציה לדור הנוכחי
             evolve(reservations, rooms);
             generation++;
+
+            // מציאת הפתרון הטוב ביותר בדור הנוכחי
+            ScheduleSolution currentBest = population.stream()
+                    .max(Comparator.comparingDouble(ScheduleSolution::getFitness))
+                    .orElseThrow();
+
+            // שמירת הפתרון הטוב ביותר שנמצא אי פעם (אליטיזם למעקב)
+            if (currentBest.getFitness() > overallBestSolution.getFitness()) {
+                overallBestSolution = new ScheduleSolution(currentBest.getGenes());
+                overallBestSolution.calculateFitness(reservations, rooms);
+            }
+
+            // תנאי 3: יעד איכות (נמצא פתרון מושלם ללא חפיפות או בעיות)
+            if (currentBest.getFitness() >= TARGET_FITNESS) {
+                System.out.println("Algorithm stopped: Found perfect schedule at generation " + generation + "!");
+                break;
+            }
+
+            // תנאי 4: קיפאון (אין שיפור בציון)
+            if (currentBest.getFitness() == bestFitnessSoFar) {
+                stagnationCounter++;
+                if (stagnationCounter >= MAX_STAGNATION) {
+                    System.out.println("Algorithm stopped: Stagnation. No improvement for " + MAX_STAGNATION + " generations.");
+                    break;
+                }
+            } else {
+                bestFitnessSoFar = currentBest.getFitness();
+                stagnationCounter = 0; // איפוס המונה כי היה שיפור
+            }
         }
 
-        return population.stream()
-                .max(Comparator.comparingDouble(ScheduleSolution::getFitness))
-                .orElse(null);
+        return overallBestSolution;
     }
 
     private void evolve(List<Reservation> reservations, List<Room> rooms) {
         List<ScheduleSolution> nextGen = new ArrayList<>();
 
+        // אליטיזם - שמירת 2 ההורים הטובים ביותר ללא שינוי
         population.sort(Comparator.comparingDouble(ScheduleSolution::getFitness).reversed());
         nextGen.add(new ScheduleSolution(population.get(0).getGenes()));
         nextGen.add(new ScheduleSolution(population.get(1).getGenes()));
@@ -38,7 +91,7 @@ public class GeneticOptimizer {
 
             ScheduleSolution child = crossover(p1, p2);
             child.mutate(0.01, rooms);
-            child.calculateFitness(reservations, rooms); // Pass rooms here
+            child.calculateFitness(reservations, rooms);
             nextGen.add(child);
         }
         this.population = nextGen;
@@ -69,7 +122,7 @@ public class GeneticOptimizer {
                 Room randomRoom = rooms.get(random.nextInt(rooms.size()));
                 sol.getGenes()[j] = randomRoom.getId();
             }
-            sol.calculateFitness(reservations, rooms); // Initialize first fitness score!
+            sol.calculateFitness(reservations, rooms);
             population.add(sol);
         }
     }
