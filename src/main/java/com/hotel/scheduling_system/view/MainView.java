@@ -2,8 +2,11 @@ package com.hotel.scheduling_system.view;
 
 import com.hotel.scheduling_system.controller.AppController;
 import com.hotel.scheduling_system.model.Guest;
+import com.hotel.scheduling_system.model.HousekeepingTask;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -15,6 +18,7 @@ import javafx.scene.layout.Region;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -63,14 +67,18 @@ public class MainView extends VBox {
         saveBtn.setDisable(true);
         saveBtn.setStyle("-fx-base: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        // --- הכפתור החדש ליצירת הזמנה ידנית! ---
         Button addResBtn = new Button("➕ New Reservation");
         addResBtn.setStyle("-fx-base: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        HBox buttonsBox = new HBox(15, mockBtn, generateBtn, saveBtn, addResBtn);
+        // --- הכפתור החדש שלנו! ---
+        Button housekeepingBtn = new Button("🧹 Housekeeping");
+        housekeepingBtn.setStyle("-fx-base: #9C27B0; -fx-text-fill: white; -fx-font-weight: bold;");
+
+        HBox buttonsBox = new HBox(15, mockBtn, generateBtn, saveBtn, addResBtn, housekeepingBtn);
         HBox dashboard = new HBox(20, ganttChart, unassignedPanel);
 
-        // --- לוגיקת החלון הקופץ (Dialog) ---
+        // פתיחת חלון הניקיונות
+        housekeepingBtn.setOnAction(e -> openHousekeepingDialog());
         addResBtn.setOnAction(e -> openNewReservationDialog());
 
         ganttChart.setOnRejectCallback(rejectedRes -> {
@@ -94,9 +102,8 @@ public class MainView extends VBox {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Database Reset");
             alert.setHeaderText(null);
-            alert.setContentText("Mock data loaded successfully! You can now generate the schedule.");
+            alert.setContentText("Mock data loaded! Run the AI to see the schedule.");
             alert.showAndWait();
-
             fitnessLabel.setText("AI Fitness Score: Waiting...");
             approvedDowngrades.clear();
             saveBtn.setDisable(true);
@@ -111,31 +118,17 @@ public class MainView extends VBox {
 
                 approvedDowngrades.clear();
                 refreshDashboard();
-
                 if (fitnessScore != null) fitnessLabel.setText(String.format("AI Fitness Score: %,.0f", fitnessScore));
             } catch (IllegalArgumentException e) {
-                // תופסים את החריגה הספציפית שיצרנו ומדפיסים אותה למסך!
-                System.err.println("Algorithm halted: " + e.getMessage());
-
-                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
-                errorAlert.setTitle("Data Error");
-                errorAlert.setHeaderText("Algorithm Halted");
-                errorAlert.setContentText(e.getMessage());
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR, e.getMessage());
                 errorAlert.showAndWait();
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception e) { e.printStackTrace(); }
         });
 
         saveBtn.setOnAction(event -> {
             if (currentAssignments != null) {
                 appController.onSaveScheduleClicked(currentAssignments);
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Success");
-                alert.setHeaderText(null);
-                alert.setContentText("Schedule saved successfully to the database!");
-                alert.showAndWait();
+                new Alert(Alert.AlertType.INFORMATION, "Schedule saved to Database!").showAndWait();
             }
         });
 
@@ -149,18 +142,84 @@ public class MainView extends VBox {
         saveBtn.setDisable(currentAssignments.isEmpty() || hasPendingDowngrades);
     }
 
-    // הפונקציה שבונה ומציגה את טופס ההזמנה החדשה
+    // --- חלון דו"ח הניקיונות המטורף שלנו ---
+    private void openHousekeepingDialog() {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Daily Housekeeping Report");
+        dialog.setHeaderText("View and assign cleaning tasks based on AI Schedule");
+
+        VBox vbox = new VBox(10);
+        HBox topControls = new HBox(10);
+        topControls.setAlignment(Pos.CENTER_LEFT);
+
+        DatePicker datePicker = new DatePicker(LocalDate.of(2026, 4, 10)); // תאריך ברירת מחדל מהעומס שלנו
+        Button loadBtn = new Button("Generate Tasks");
+        loadBtn.setStyle("-fx-base: #FFC107; -fx-font-weight: bold;");
+
+        topControls.getChildren().addAll(new Label("Select Date:"), datePicker, loadBtn);
+
+        // טבלת משימות מקצועית (TableView)
+        TableView<HousekeepingTask> table = new TableView<>();
+
+        TableColumn<HousekeepingTask, Integer> roomCol = new TableColumn<>("Room");
+        roomCol.setCellValueFactory(data -> new SimpleIntegerProperty(data.getValue().roomNumber()).asObject());
+
+        TableColumn<HousekeepingTask, String> staffCol = new TableColumn<>("Assigned Staff");
+        staffCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().staffName()));
+
+        TableColumn<HousekeepingTask, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().status()));
+
+        table.getColumns().addAll(roomCol, staffCol, statusCol);
+        table.setPrefWidth(350);
+        table.setPrefHeight(300);
+
+        loadBtn.setOnAction(e -> {
+            LocalDate date = datePicker.getValue();
+            if (date != null) {
+                List<Integer> activeRooms = new ArrayList<>();
+
+                // ה"קסם": סורקים את התוצאות שה-AI קבע למלון!
+                if (currentAssignments != null) {
+                    for (Map.Entry<Room, List<Reservation>> entry : currentAssignments.entrySet()) {
+                        // אם יש בחדר הזה הזמנה שנופלת על התאריך הנבחר - הוא דורש ניקיון!
+                        boolean needsCleaning = entry.getValue().stream().anyMatch(res ->
+                                !date.isBefore(res.startDate()) && !date.isAfter(res.endDate())
+                        );
+                        if (needsCleaning) {
+                            activeRooms.add(entry.getKey().getId());
+                        }
+                    }
+                }
+
+                // מנגנון ביטחון: אם עוד לא יצרנו לוח חכם, ניתן משימות לכל החדרים כברירת מחדל
+                if (activeRooms.isEmpty()) {
+                    activeRooms.addAll(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
+                }
+
+                // שולחים ל-Controller לייצר ולשמור את המשימות במסד הנתונים
+                List<HousekeepingTask> tasks = appController.generateAndGetHousekeepingReport(date, activeRooms);
+                table.getItems().setAll(tasks);
+            }
+        });
+
+        vbox.getChildren().addAll(topControls, table);
+        dialog.getDialogPane().setContent(vbox);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        dialog.showAndWait();
+    }
+
     private void openNewReservationDialog() {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Create New Reservation");
         dialog.setHeaderText("Please fill out the reservation details:");
 
-        // הפיכת תיבת האורחים לתיבת טקסט משולבת (Editable ComboBox)
         ComboBox<String> guestComboBox = new ComboBox<>();
         for (Guest g : appController.getAllGuests()) {
             guestComboBox.getItems().add(g.firstName() + " " + g.lastName());
         }
-        guestComboBox.setEditable(true); // עכשיו המנהל יכול להקליד כל שם שירצה!
+        guestComboBox.setEditable(true);
         guestComboBox.setPromptText("Select or type a name...");
 
         DatePicker startDatePicker = new DatePicker(LocalDate.of(2026, 4, 10));
@@ -180,7 +239,6 @@ public class MainView extends VBox {
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
-        // === ולידציה שמונעת מהחלון להיסגר במקרה של שגיאה ===
         final Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
         okButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
             String guestName = guestComboBox.getValue();
@@ -188,47 +246,21 @@ public class MainView extends VBox {
             LocalDate start = startDatePicker.getValue();
             LocalDate end = endDatePicker.getValue();
 
-            // 1. חסר שם או סוג חדר
             if (guestName == null || guestName.trim().isEmpty() || roomType == null) {
-                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
-                errorAlert.setTitle("Missing Information");
-                errorAlert.setHeaderText("Validation Failed");
-                errorAlert.setContentText("You must provide a guest name and select a room type.");
-                errorAlert.showAndWait();
-                event.consume(); // מונע מהחלון להיסגר!
-                return;
+                new Alert(Alert.AlertType.ERROR, "You must provide a guest name and select a room type.").showAndWait();
+                event.consume(); return;
             }
-
-            // 2. תאריכים שגויים
             if (start == null || end == null || !end.isAfter(start)) {
-                Alert errorAlert = new Alert(Alert.AlertType.ERROR);
-                errorAlert.setTitle("Invalid Dates");
-                errorAlert.setHeaderText("Validation Failed");
-                errorAlert.setContentText("The End Date must be strictly after the Start Date.");
-                errorAlert.showAndWait();
-                event.consume(); // מונע מהחלון להיסגר!
-                return;
+                new Alert(Alert.AlertType.ERROR, "The End Date must be strictly after the Start Date.").showAndWait();
+                event.consume(); return;
             }
         });
 
-        // אם הכל עבר תקין, מבצעים את השמירה בפועל
         dialog.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
-                // שולחים את השם לבדיקה - אם הוא חדש הוא יתווסף אוטומטית למסד הנתונים!
                 int guestId = appController.getOrCreateGuest(guestComboBox.getValue());
-
-                appController.createNewReservation(
-                        guestId,
-                        roomTypeBox.getValue(),
-                        startDatePicker.getValue(),
-                        endDatePicker.getValue()
-                );
-
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Reservation Added");
-                alert.setHeaderText(null);
-                alert.setContentText("New reservation added successfully! Click 'Generate Schedule' to see how the AI handles it.");
-                alert.showAndWait();
+                appController.createNewReservation(guestId, roomTypeBox.getValue(), startDatePicker.getValue(), endDatePicker.getValue());
+                new Alert(Alert.AlertType.INFORMATION, "New reservation added! Click 'Generate Schedule' to see how the AI handles it.").showAndWait();
             }
         });
     }

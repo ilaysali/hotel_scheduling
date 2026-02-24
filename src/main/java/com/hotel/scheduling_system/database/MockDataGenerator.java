@@ -74,6 +74,12 @@ public class MockDataGenerator {
                     "(14, 2, '2026-04-02', '2026-04-07'), " +
                     "(15, 3, '2026-04-15', '2026-04-20')");
 
+            // 5. יצירת צוות ניקיון
+            stmt.executeUpdate("INSERT INTO Staff (staff_id, first_name, last_name, role) VALUES " +
+                    "(1, 'Rosa', 'Diaz', 'Housekeeping'), " +
+                    "(2, 'Consuela', 'Garcia', 'Housekeeping'), " +
+                    "(3, 'Mario', 'Rossi', 'Housekeeping')");
+
             System.out.println("Massive Mock Data Generation Complete!");
 
         } catch (Exception e) {
