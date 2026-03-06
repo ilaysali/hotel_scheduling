@@ -12,10 +12,13 @@ public class GeneticOptimizer {
     private static final int MAX_GENERATIONS = 1000;
     private static final long MAX_TIME_MS = 5000;
     private static final int MAX_STAGNATION = 100;
+    private static final int POPULATION_SIZE = 100;
+    private static final int TOURNAMENT_SIZE = 5;
+    private static final double MUTATION_RATE = 0.01;
 
     public ScheduleSolution solve(List<Reservation> reservations, List<Room> rooms) {
-        // 1. אתחול
-        initializePopulation(100, reservations, rooms);
+        // 1. Initialization
+        initializePopulation(reservations, rooms);
 
         long startTime = System.currentTimeMillis();
         int generation = 0;
@@ -25,13 +28,13 @@ public class GeneticOptimizer {
         ScheduleSolution overallBestSolution = population.get(0);
 
         while (true) {
-            // תנאי 1: מגבלת דורות
+            // Condition 1: Generation limit
             if (generation >= MAX_GENERATIONS) {
                 System.out.println("Algorithm stopped: Reached generation limit.");
                 break;
             }
 
-            // תנאי 2: מגבלת זמן
+            // Condition 2: Time limit
             if (System.currentTimeMillis() - startTime > MAX_TIME_MS) {
                 System.out.println("Algorithm stopped: Reached time limit.");
                 break;
@@ -45,12 +48,11 @@ public class GeneticOptimizer {
                     .orElseThrow();
 
             if (currentBest.getFitness() > overallBestSolution.getFitness()) {
-                // כאן זה בסדר להעתיק כי אנחנו רוצים לשמור "תמונת מצב" שלא תשתנה בטעות
                 overallBestSolution = new ScheduleSolution(currentBest.getGenes());
                 overallBestSolution.calculateFitness(reservations, rooms);
             }
 
-            // תנאי 3: קיפאון (שיניתי מ-== ל-<= כדי שיהיה בטוח יותר)
+            // Condition 3: Stagnation
             if (currentBest.getFitness() <= bestFitnessSoFar) {
                 stagnationCounter++;
                 if (stagnationCounter >= MAX_STAGNATION) {
@@ -69,31 +71,29 @@ public class GeneticOptimizer {
     private void evolve(List<Reservation> reservations, List<Room> rooms) {
         List<ScheduleSolution> nextGen = new ArrayList<>();
 
-        // אליטיזם - מיון האוכלוסייה מהטוב לגרוע
+        // Elitism - Sort population from best to worst
         population.sort(Comparator.comparingDouble(ScheduleSolution::getFitness).reversed());
 
-        // תיקון: מעבירים את הרפרנס המקורי! שומר גם על הזיכרון וגם על ערך ה-Fitness שהחושב
         nextGen.add(population.get(0));
         nextGen.add(population.get(1));
 
         while (nextGen.size() < population.size()) {
-            ScheduleSolution p1 = tournamentSelection(5);
-            ScheduleSolution p2 = tournamentSelection(5);
+            ScheduleSolution p1 = tournamentSelection();
+            ScheduleSolution p2 = tournamentSelection();
 
             ScheduleSolution child = crossover(p1, p2);
-            child.mutate(0.01, rooms);
+            child.mutate(MUTATION_RATE, rooms);
 
-            // רק הילדים החדשים צריכים חישוב מחדש
+            // Only new children need calculations
             child.calculateFitness(reservations, rooms);
             nextGen.add(child);
         }
         this.population = nextGen;
     }
 
-    // אופטימיזציה קריטית: ביטול רשימת ה-ArrayList לטובת חיפוש O(1) בזיכרון
-    private ScheduleSolution tournamentSelection(int k) {
+    private ScheduleSolution tournamentSelection() {
         ScheduleSolution best = null;
-        for (int i = 0; i < k; i++) {
+        for (int i = 0; i < TOURNAMENT_SIZE; i++) {
             ScheduleSolution competitor = population.get(random.nextInt(population.size()));
             if (best == null || competitor.getFitness() > best.getFitness()) {
                 best = competitor;
@@ -110,12 +110,12 @@ public class GeneticOptimizer {
         return new ScheduleSolution(childGenes);
     }
 
-    private void initializePopulation(int size, List<Reservation> reservations, List<Room> rooms) {
-        for (int i = 0; i < size; i++) {
+    private void initializePopulation(List<Reservation> reservations, List<Room> rooms) {
+        for (int i = 0; i < POPULATION_SIZE; i++) {
             ScheduleSolution sol = new ScheduleSolution(reservations.size());
             for (int j = 0; j < reservations.size(); j++) {
                 Room randomRoom = rooms.get(random.nextInt(rooms.size()));
-                sol.getGenes()[j] = randomRoom.getId();
+                sol.getGenes()[j] = randomRoom.id();
             }
             sol.calculateFitness(reservations, rooms);
             population.add(sol);
