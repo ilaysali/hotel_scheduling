@@ -9,29 +9,35 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Repository
-public class RoomDAO {
-    private final String url = "jdbc:mysql://localhost:3306/hotel_db";
-    private final String user = "root";
-    private final String password = "admin"; // Using your correct password!
+public class RoomDAO extends BaseDAO { // Inherits database connection logic and credentials from BaseDAO
 
+    /**
+     * Retrieves the complete list of rooms from the hotel database.
+     * This data is used to populate the Gantt chart and initialize the scheduling algorithm.
+     * @return A list of Room objects containing ID, number, and type.
+     */
     public List<Room> getAllRooms() {
         List<Room> rooms = new ArrayList<>();
 
-        // Updated query to use the new 'room_id' column
+        // SQL query to fetch basic room information
         String query = "SELECT room_id, room_number, room_type FROM Rooms";
 
-        try (Connection conn = DriverManager.getConnection(url, user, password);
+        // Using getConnection() from the parent BaseDAO class
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
 
             while (rs.next()) {
+                // Mapping each database row to a Java Room object
                 rooms.add(new Room(
-                        rs.getInt("room_id"), // Extract using the new column name
+                        rs.getInt("room_id"),
                         rs.getInt("room_number"),
-                        RoomType.valueOf(rs.getString("room_type"))
+                        // Converts the string from the database to a RoomType Enum (case-insensitive)
+                        RoomType.valueOf(rs.getString("room_type").toUpperCase())
                 ));
             }
         } catch (SQLException e) {
+            // Logs database errors for debugging
             e.printStackTrace();
         }
         return rooms;

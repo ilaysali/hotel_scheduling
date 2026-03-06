@@ -10,11 +10,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Repository
-public class ReservationDAO {
-    private final String url = "jdbc:mysql://localhost:3306/hotel_db";
-    private final String user = "root";
-    private final String password = "admin";
+public class ReservationDAO extends BaseDAO { // Inherits database connection logic from BaseDAO
 
+    /**
+     * Retrieves all reservations from the database, joining with Rooms and Guests
+     * to provide a complete overview for the scheduling system.
+     */
     public List<Reservation> getAllReservations() {
         List<Reservation> reservations = new ArrayList<>();
         String query = """
@@ -30,7 +31,8 @@ public class ReservationDAO {
                 JOIN Guests g ON r.guest_id = g.guest_id
                 """;
 
-        try (Connection conn = DriverManager.getConnection(url, user, password);
+        // Using getConnection() from BaseDAO
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
 
@@ -40,16 +42,20 @@ public class ReservationDAO {
                         rs.getString("guest_name"),
                         rs.getDate("start_date").toLocalDate(),
                         rs.getDate("end_date").toLocalDate(),
-                        RoomType.valueOf(rs.getString("room_type"))
+                        RoomType.valueOf(rs.getString("room_type").toUpperCase())
                 ));
             }
         } catch (SQLException e) { e.printStackTrace(); }
         return reservations;
     }
 
+    /**
+     * Updates the assigned room for a specific reservation.
+     * Used when the scheduling algorithm or user moves a reservation to a new room.
+     */
     public void updateReservationRoom(int reservationId, int newRoomId) {
         String query = "UPDATE Reservation_Rooms SET room_id = ? WHERE reservation_id = ?";
-        try (Connection conn = DriverManager.getConnection(url, user, password);
+        try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(query)) {
             pstmt.setInt(1, newRoomId);
             pstmt.setInt(2, reservationId);
@@ -57,18 +63,22 @@ public class ReservationDAO {
         } catch (SQLException e) { e.printStackTrace(); }
     }
 
-    // --- הפונקציה החדשה שמוסיפה הזמנה למסד הנתונים! ---
+    /**
+     * Adds a new reservation to the database.
+     * This process handles ID generation and assigns a dummy room based on the requested type
+     * so the scheduling algorithm can process it later.
+     */
     public void addNewReservation(int guestId, String roomType, LocalDate startDate, LocalDate endDate) {
-        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+        try (Connection conn = getConnection()) {
 
-            // 1. מציאת מזהה ההזמנה הבא הפנוי (ID)
+            // 1. Find the next available reservation ID
             int nextResId = 1;
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT COALESCE(MAX(reservation_id), 0) + 1 AS next_id FROM Reservations")) {
                 if (rs.next()) nextResId = rs.getInt("next_id");
             }
 
-            // 2. מציאת חדר דמה (Dummy) שמתאים לסוג החדר המבוקש כדי להוות כרטיסייה התחלתית לאלגוריתם
+            // 2. Find a dummy room ID matching the requested room type to initialize the record
             int dummyRoomId = -1;
             try (PreparedStatement pstmt = conn.prepareStatement("SELECT room_id FROM Rooms WHERE room_type = ? LIMIT 1")) {
                 pstmt.setString(1, roomType);
@@ -77,14 +87,14 @@ public class ReservationDAO {
                 }
             }
 
-            // 3. שמירה בטבלת Reservations (קשר בין הזמנה לאורח)
+            // 3. Save entry in the main Reservations table (Link between Reservation and Guest)
             try (PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Reservations (reservation_id, guest_id) VALUES (?, ?)")) {
                 pstmt.setInt(1, nextResId);
                 pstmt.setInt(2, guestId);
                 pstmt.executeUpdate();
             }
 
-            // 4. שמירה בטבלת Reservation_Rooms (התאריכים והחדר שביקש)
+            // 4. Save entry in the Reservation_Rooms table (Dates and room requirements)
             try (PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Reservation_Rooms (reservation_id, room_id, start_date, end_date) VALUES (?, ?, ?, ?)")) {
                 pstmt.setInt(1, nextResId);
                 pstmt.setInt(2, dummyRoomId);

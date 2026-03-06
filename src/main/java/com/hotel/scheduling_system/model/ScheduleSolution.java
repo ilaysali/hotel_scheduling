@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Random;
 
 public class ScheduleSolution {
-    private final int[] genes; // Index = Reservation ID, Value = Assigned Room ID
+    private final int[] genes;
     private double fitness;
     private final Random random = new Random();
 
@@ -30,49 +30,44 @@ public class ScheduleSolution {
         };
     }
 
-    /**
-     * פונקציית ה-Fitness המעודכנת: מונעת "חורים", מחשבת לפי לילות, ושומרת על Overbooking כגרוע מכל.
-     */
     public void calculateFitness(List<Reservation> reservations, List<Room> rooms) {
         double penalties = 0;
+        double bonuses = 0;
 
-        // --- מערכת המשקלים המאוזנת החדשה ---
-        double W_HARD = 100000.0;                 // קנס קריטי על חפיפה - שום שנמוך לא יעקוף את זה
-        double W_DOWNGRADE_PER_NIGHT = 2000.0;    // לקוח זועם - מחושב לפי כמות הלילות
-        double W_UPGRADE_PER_NIGHT = 200.0;       // אובדן רווח קל משדרוג
-        double W_FRAGMENTATION = 1000.0;          // יצירת חור בלתי ניתן למכירה של לילה אחד
+        double W_HARD = 100000.0;
+        double W_DOWNGRADE_PER_NIGHT = 2000.0;
+        double W_UPGRADE_PER_NIGHT = 200.0;
+        double W_FRAGMENTATION = 1000.0;
+        double B_PERFECT_MATCH = 500.0;
 
-        // מילון עזר שיעזור לנו לבדוק חורים: ממפה מזהה חדר לרשימת ההזמנות ששובצו בו
+        // אופטימיזציה 1: מילון חדרים מהיר כדי להימנע מחיפושי Stream איטיים
+        Map<Integer, Room> roomMap = new HashMap<>();
         Map<Integer, List<Reservation>> roomSchedules = new HashMap<>();
+
         for (Room room : rooms) {
+            roomMap.put(room.getId(), room);
             roomSchedules.put(room.getId(), new ArrayList<>());
         }
 
-        // --- מעבר ראשון: בדיקת אילוצים על כל הזמנה בנפרד (חפיפות ושדרוגים/שנמוכים) ---
+        // --- מעבר ראשון: בניית הלוז לכל חדר ובדיקת אילוצים רכים (שדרוגים) ב-O(N) ---
         for (int i = 0; i < reservations.size(); i++) {
             Reservation currentRes = reservations.get(i);
             int assignedRoomId = genes[i];
 
-            Room assignedRoom = rooms.stream()
-                    .filter(r -> r.getId() == assignedRoomId)
-                    .findFirst()
-                    .orElse(null);
+            Room assignedRoom = roomMap.get(assignedRoomId); // שליפה ב-O(1) במקום O(N)
 
             if (assignedRoom != null) {
-                // הוספת ההזמנה לרשימת החדר לבדיקת חורים בהמשך
                 roomSchedules.get(assignedRoomId).add(currentRes);
 
-                // 1. SOFT CONSTRAINTS (שדרוג מול שנמוך לפי אורך שהייה)
                 if (currentRes.roomType() != assignedRoom.getType()) {
                     int requestedRank = getRoomRank(currentRes.roomType());
                     int assignedRank = getRoomRank(assignedRoom.getType());
-                    long nights = ChronoUnit.DAYS.between(currentRes.startDate(), currentRes.endDate());
-                    // העיקרון שלך: Fail-Fast במקום לטאטא מתחת לשטיח
+
+                    // טיפ: אם תוכל להוסיף את מספר הלילות למחלקה Reservation, תוכל לחסוך את הקריאה הזו לחלוטין!
+                    long nights = currentRes.nights();
+
                     if (nights <= 0) {
-                        throw new IllegalArgumentException(
-                                "CRITICAL ERROR: Reservation ID " + currentRes.id() + " has invalid dates! " +
-                                        "End date (" + currentRes.endDate() + ") cannot be before or equal to Start date (" + currentRes.startDate() + ")."
-                        );
+                        throw new IllegalArgumentException("CRITICAL ERROR: Invalid dates for Reservation ID " + currentRes.id());
                     }
 
                     if (assignedRank < requestedRank) {
@@ -82,38 +77,36 @@ public class ScheduleSolution {
                     }
                 }
             }
-
-            // 2. HARD CONSTRAINT (חפיפת זמנים - כפילות הזמנות)
-            for (int j = i + 1; j < reservations.size(); j++) {
-                if (genes[i] == genes[j] && currentRes.overlaps(reservations.get(j))) {
-                    penalties += W_HARD;
-                }
-            }
         }
 
-        // --- מעבר שני: בדיקת Anti-Fragmentation (מניעת חורים בלוח השנה) ---
+        // --- מעבר שני: בדיקת חפיפות (HARD CONSTRAINT) יחד עם חורים ורצפים ---
+        // אופטימיזציה 2: חסכנו את הלולאה הכפולה האיומה!
         for (List<Reservation> schedule : roomSchedules.values()) {
             if (schedule.size() > 1) {
-                // מסדרים את כל ההזמנות של החדר לפי תאריך ההתחלה שלהן
+                // מיון פעם אחת
                 schedule.sort(Comparator.comparing(Reservation::startDate));
 
                 for (int i = 0; i < schedule.size() - 1; i++) {
                     Reservation current = schedule.get(i);
                     Reservation next = schedule.get(i + 1);
 
-                    // בודקים חורים רק אם ההזמנות לא חופפות (על חפיפה כבר קנסנו ב-W_HARD)
-                    if (!current.overlaps(next)) {
+                    // בגלל שהמערך ממוין, מספיק לבדוק חפיפה עם הבא בתור! O(1) לפעולה
+                    if (current.overlaps(next)) {
+                        penalties += W_HARD;
+                    } else {
+                        // אם אין חפיפה, בודקים רצפים וחורים
                         long gap = ChronoUnit.DAYS.between(current.endDate(), next.startDate());
                         if (gap == 1) {
-                            // מצאנו חור של יום אחד בדיוק! האלגוריתם יחטוף קנס כדי שינסה לסדר אותן צמודות
                             penalties += W_FRAGMENTATION;
+                        } else if (gap == 0) {
+                            bonuses += B_PERFECT_MATCH;
                         }
                     }
                 }
             }
         }
 
-        this.fitness = 1_000_000.0 - penalties;
+        this.fitness = 1_000_000.0 - penalties + bonuses;
     }
 
     public void mutate(double probability, List<Room> rooms) {

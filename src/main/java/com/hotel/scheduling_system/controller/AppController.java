@@ -24,8 +24,6 @@ public class AppController {
     private final MockDataGenerator mockDataGenerator;
     private final GuestDAO guestDAO;
     private final ReservationDAO reservationDAO;
-
-    // שני החברים החדשים שלנו:
     private final StaffDAO staffDAO;
     private final HousekeepingDAO housekeepingDAO;
 
@@ -47,7 +45,6 @@ public class AppController {
     public void createNewReservation(int guestId, String roomType, LocalDate startDate, LocalDate endDate) { reservationDAO.addNewReservation(guestId, roomType, startDate, endDate); }
     public int getOrCreateGuest(String fullName) { return guestDAO.getOrCreateGuest(fullName); }
 
-    // === הפעולה החדשה שמייצרת ומביאה את דו"ח הניקיונות! ===
     public List<HousekeepingTask> generateAndGetHousekeepingReport(LocalDate date, List<Integer> roomIdsToClean) {
         List<Staff> cleaners = staffDAO.getHousekeepingStaff();
 

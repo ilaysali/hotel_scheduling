@@ -25,12 +25,13 @@ public class SchedulingSystemApplication extends Application {
 		// Ask Spring Boot to give us the MainView (which has the AppController inside it)
 		MainView mainView = springContext.getBean(MainView.class);
 
-		// Put the MainView inside a Scene
-		Scene scene = new Scene(mainView, 800, 600);
+		Scene scene = new Scene(mainView);
 
 		// Show the window
 		primaryStage.setTitle("Hotel Scheduling System");
 		primaryStage.setScene(scene);
+		primaryStage.setMaximized(true);
+
 		primaryStage.show();
 	}
 

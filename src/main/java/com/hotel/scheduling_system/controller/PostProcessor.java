@@ -16,17 +16,26 @@ public class PostProcessor {
         List<Reservation> unassignedList = new ArrayList<>();
         Map<Room, List<Reservation>> roomAssignments = new HashMap<>();
 
+        // יצירת HashMap לחדרים - שומר על ביצועי O(1) בשליפת החדר
+        Map<Integer, Room> roomMap = new HashMap<>();
         for (Room room : rooms) {
             roomAssignments.put(room, new ArrayList<>());
+            roomMap.put(room.getId(), room);
         }
 
         int[] genes = winningSolution.getGenes();
 
+        // חוזרים לרוץ על האינדקס הפשוט i שמתאים בין הרשימה למערך הגנים
         for (int i = 0; i < allReservations.size(); i++) {
+
+            // שליפה ב-O(1) (בהנחה שזה ArrayList)
             Reservation currentRes = allReservations.get(i);
+
+            // הגן במקום ה-i מכיל את ה-ID של החדר שהוקצה להזמנה במקום ה-i
             int assignedRoomId = genes[i];
 
-            Room assignedRoom = rooms.stream().filter(r -> r.getId() == assignedRoomId).findFirst().orElse(null);
+            // שליפת החדר המוקצה מתוך המילון ב-O(1)
+            Room assignedRoom = roomMap.get(assignedRoomId);
 
             if (assignedRoom == null) {
                 unassignedList.add(currentRes);
@@ -52,8 +61,6 @@ public class PostProcessor {
 
         result.put("ASSIGNMENTS", roomAssignments);
         result.put("UNASSIGNED", unassignedList);
-
-        // הנה השורה החדשה! מוסיפים את ציון ה-Fitness למילון שחוזר לממשק
         result.put("FITNESS_SCORE", winningSolution.getFitness());
 
         return result;

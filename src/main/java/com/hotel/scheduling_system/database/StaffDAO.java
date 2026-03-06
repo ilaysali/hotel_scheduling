@@ -8,21 +8,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Repository
-public class StaffDAO {
-    private final String url = "jdbc:mysql://localhost:3306/hotel_db";
-    private final String user = "root";
-    private final String password = "admin";
+public class StaffDAO extends BaseDAO { // Inherits database connection logic and credentials from BaseDAO
 
+    /**
+     * Retrieves all staff members assigned to the 'Housekeeping' role.
+     * This list is used to distribute cleaning tasks across available personnel.
+     * @return A list of Staff objects with the Housekeeping role.
+     */
     public List<Staff> getHousekeepingStaff() {
         List<Staff> staffList = new ArrayList<>();
-        // שולפים רק את המנקים!
+
+        // Query to filter specifically for staff members in the Housekeeping department
         String query = "SELECT staff_id, first_name, last_name, role FROM Staff WHERE role = 'Housekeeping'";
 
-        try (Connection conn = DriverManager.getConnection(url, user, password);
+        // Using getConnection() from the parent BaseDAO class
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
 
             while (rs.next()) {
+                // Mapping the database result set to Staff domain objects
                 staffList.add(new Staff(
                         rs.getInt("staff_id"),
                         rs.getString("first_name"),
@@ -31,6 +36,7 @@ public class StaffDAO {
                 ));
             }
         } catch (SQLException e) {
+            // Log any SQL errors to the console for debugging
             e.printStackTrace();
         }
         return staffList;

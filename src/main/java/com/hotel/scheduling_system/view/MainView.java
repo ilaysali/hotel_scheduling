@@ -70,14 +70,12 @@ public class MainView extends VBox {
         Button addResBtn = new Button("➕ New Reservation");
         addResBtn.setStyle("-fx-base: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        // --- הכפתור החדש שלנו! ---
-        Button housekeepingBtn = new Button("🧹 Housekeeping");
+        Button housekeepingBtn = new Button("Housekeeping");
         housekeepingBtn.setStyle("-fx-base: #9C27B0; -fx-text-fill: white; -fx-font-weight: bold;");
 
         HBox buttonsBox = new HBox(15, mockBtn, generateBtn, saveBtn, addResBtn, housekeepingBtn);
         HBox dashboard = new HBox(20, ganttChart, unassignedPanel);
 
-        // פתיחת חלון הניקיונות
         housekeepingBtn.setOnAction(e -> openHousekeepingDialog());
         addResBtn.setOnAction(e -> openNewReservationDialog());
 

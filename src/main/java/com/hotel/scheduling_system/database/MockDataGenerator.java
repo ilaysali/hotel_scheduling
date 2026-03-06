@@ -1,22 +1,23 @@
 package com.hotel.scheduling_system.database;
 
 import org.springframework.stereotype.Component;
-
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.Statement;
 
 @Component
-public class MockDataGenerator {
-    private final String url = "jdbc:mysql://localhost:3306/hotel_db";
-    private final String user = "root";
-    private final String password = "admin";
+public class MockDataGenerator extends BaseDAO { // Inherits database connection logic from BaseDAO
 
+    /**
+     * Resets the database by clearing all tables and generating a fresh set of mock data.
+     * Creates a high-occupancy scenario for April-May 2026.
+     */
     public void resetAndGenerate() {
-        try (Connection conn = DriverManager.getConnection(url, user, password);
+        // Using getConnection() from BaseDAO to ensure centralized configuration
+        try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
 
             System.out.println("Clearing old data...");
+            // Temporarily disable foreign key checks to allow TRUNCATE on all tables
             stmt.executeUpdate("SET FOREIGN_KEY_CHECKS = 0");
             stmt.executeUpdate("TRUNCATE TABLE Reservation_Rooms");
             stmt.executeUpdate("TRUNCATE TABLE Payments");
@@ -27,60 +28,60 @@ public class MockDataGenerator {
             stmt.executeUpdate("TRUNCATE TABLE Rooms");
             stmt.executeUpdate("SET FOREIGN_KEY_CHECKS = 1");
 
-            System.out.println("Inserting Massive Mock Data Scenario...");
+            System.out.println("Generating Balanced Crowded Scenario: 20 Rooms, 100 Reservations (April-May)...");
 
-            // 1. יצירת 12 חדרים למלון
+            // 1. Define 20 Rooms with different types and prices
             stmt.executeUpdate("INSERT INTO Rooms (room_id, room_number, room_type, price_per_night) VALUES " +
                     "(1, 101, 'SINGLE', 100), (2, 102, 'SINGLE', 100), (3, 103, 'SINGLE', 100), (4, 104, 'SINGLE', 100), (5, 105, 'SINGLE', 100), " +
                     "(6, 201, 'DOUBLE', 150), (7, 202, 'DOUBLE', 150), (8, 203, 'DOUBLE', 150), (9, 204, 'DOUBLE', 150), (10, 205, 'DOUBLE', 150), " +
-                    "(11, 301, 'SUITE', 300), (12, 302, 'SUITE', 300)");
+                    "(11, 206, 'DOUBLE', 150), (12, 207, 'DOUBLE', 150), (13, 208, 'DOUBLE', 150), (14, 209, 'DOUBLE', 150), (15, 210, 'DOUBLE', 150), " +
+                    "(16, 301, 'SUITE', 300), (17, 302, 'SUITE', 300), (18, 303, 'SUITE', 300), (19, 304, 'SUITE', 300), (20, 305, 'SUITE', 300)");
 
-            // 2. יצירת 15 אורחים
-            stmt.executeUpdate("INSERT INTO Guests (guest_id, first_name, last_name, email) VALUES " +
-                    "(1, 'John', 'Doe', 'g1@test.com'), (2, 'Jane', 'Smith', 'g2@test.com'), " +
-                    "(3, 'Michael', 'Jordan', 'g3@test.com'), (4, 'Serena', 'Williams', 'g4@test.com'), " +
-                    "(5, 'Elon', 'Musk', 'g5@test.com'), (6, 'Bill', 'Gates', 'g6@test.com'), " +
-                    "(7, 'Steve', 'Jobs', 'g7@test.com'), (8, 'Jeff', 'Bezos', 'g8@test.com'), " +
-                    "(9, 'Mark', 'Zuck', 'g9@test.com'), (10, 'Larry', 'Page', 'g10@test.com'), " +
-                    "(11, 'Tim', 'Cook', 'g11@test.com'), (12, 'Satya', 'Nadella', 'g12@test.com'), " +
-                    "(13, 'Sundar', 'Pichai', 'g13@test.com'), (14, 'Lisa', 'Su', 'g14@test.com'), " +
-                    "(15, 'Jensen', 'Huang', 'g15@test.com')");
+            // 2. Create 100 Mock Guests
+            StringBuilder guestsSql = new StringBuilder("INSERT INTO Guests (guest_id, first_name, last_name, email) VALUES ");
+            for (int i = 1; i <= 100; i++) {
+                guestsSql.append(String.format("(%d, 'Guest%d', 'Last%d', 'user%d@test.com')", i, i, i, i));
+                if (i < 100) guestsSql.append(", ");
+            }
+            stmt.executeUpdate(guestsSql.toString());
 
-            // 3. הזמנות (מעטפות)
-            stmt.executeUpdate("INSERT INTO Reservations (reservation_id, guest_id) VALUES " +
-                    "(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), " +
-                    "(11, 11), (12, 12), (13, 13), (14, 14), (15, 15)");
+            // 3. Create 100 Reservation "Envelopes"
+            StringBuilder resSql = new StringBuilder("INSERT INTO Reservations (reservation_id, guest_id) VALUES ");
+            for (int i = 1; i <= 100; i++) {
+                resSql.append(String.format("(%d, %d)", i, i));
+                if (i < 100) resSql.append(", ");
+            }
+            stmt.executeUpdate(resSql.toString());
 
-            // 4. תאריכים וסוגי חדרים מבוקשים - כאן מתחיל הכאוס!
-            stmt.executeUpdate("INSERT INTO Reservation_Rooms (reservation_id, room_id, start_date, end_date) VALUES " +
-                    // --- מלחמת הסוויטות: 4 הזמנות חופפות, רק 2 סוויטות קיימות (חדרים 11,12) ---
-                    "(1, 11, '2026-04-10', '2026-04-15'), " +
-                    "(2, 11, '2026-04-11', '2026-04-14'), " +
-                    "(3, 12, '2026-04-09', '2026-04-16'), " +
-                    "(4, 12, '2026-04-10', '2026-04-12'), " +
+            // 4. Assign Rooms - Two months (April-May) - Dense but logical scheduling
+            StringBuilder resRoomsSql = new StringBuilder("INSERT INTO Reservation_Rooms (reservation_id, room_id, start_date, end_date) VALUES ");
 
-                    // --- עומס זוגות: 7 הזמנות חופפות בטירוף, רק 5 חדרים זוגיים קיימים (חדרים 6-10) ---
-                    "(5, 6, '2026-04-05', '2026-04-08'), " +
-                    "(6, 6, '2026-04-05', '2026-04-09'), " +
-                    "(7, 7, '2026-04-06', '2026-04-10'), " +
-                    "(8, 8, '2026-04-04', '2026-04-07'), " +
-                    "(9, 9, '2026-04-05', '2026-04-08'), " +
-                    "(10, 10, '2026-04-05', '2026-04-09'), " +
-                    "(11, 10, '2026-04-06', '2026-04-08'), " +
+            // Create occupancy chains for each room (approx. 4 reservations per room over two months)
+            int resId = 1;
+            for (int roomId = 1; roomId <= 20; roomId++) {
+                // Reservation 1: Early April
+                resRoomsSql.append(String.format("(%d, %d, '2026-04-01', '2026-04-07'), ", resId++, roomId));
+                // Reservation 2: Mid April (Back-to-back with the previous one)
+                resRoomsSql.append(String.format("(%d, %d, '2026-04-07', '2026-04-15'), ", resId++, roomId));
+                // Reservation 3: Early May
+                resRoomsSql.append(String.format("(%d, %d, '2026-05-01', '2026-05-10'), ", resId++, roomId));
+                // Reservation 4: Late May (Slight overlaps in specific rooms to create scheduling challenges)
+                String startDate = (roomId % 5 == 0) ? "2026-05-08" : "2026-05-15";
+                resRoomsSql.append(String.format("(%d, %d, '%s', '2026-05-25'), ", resId++, roomId, startDate));
 
-                    // --- משחק טטריס (חדרי יחיד): אפשר לסדר אותם יפה אם האלגוריתם חכם (חדרים 1-5) ---
-                    "(12, 1, '2026-04-01', '2026-04-05'), " +
-                    "(13, 1, '2026-04-05', '2026-04-10'), " + // מתחיל בדיוק מתי ש-12 עוזב!
-                    "(14, 2, '2026-04-02', '2026-04-07'), " +
-                    "(15, 3, '2026-04-15', '2026-04-20')");
+                if (resId > 100) break;
+            }
 
-            // 5. יצירת צוות ניקיון
+            // Clean up trailing comma
+            String finalSql = resRoomsSql.toString().trim();
+            if (finalSql.endsWith(",")) finalSql = finalSql.substring(0, finalSql.length() - 1);
+            stmt.executeUpdate(finalSql);
+
+            // 5. Staff Members
             stmt.executeUpdate("INSERT INTO Staff (staff_id, first_name, last_name, role) VALUES " +
-                    "(1, 'Rosa', 'Diaz', 'Housekeeping'), " +
-                    "(2, 'Consuela', 'Garcia', 'Housekeeping'), " +
-                    "(3, 'Mario', 'Rossi', 'Housekeeping')");
+                    "(1, 'Rosa', 'Diaz', 'Housekeeping'), (2, 'Terry', 'Jeffords', 'Maintenance')");
 
-            System.out.println("Massive Mock Data Generation Complete!");
+            System.out.println("Done! 20 rooms, 100 reservations generated for April-May. High occupancy but manageable.");
 
         } catch (Exception e) {
             e.printStackTrace();
