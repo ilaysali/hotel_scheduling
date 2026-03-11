@@ -1,6 +1,8 @@
 package com.hotel.scheduling_system.database;
 
 import com.hotel.scheduling_system.model.Staff;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
 import java.sql.*;
@@ -9,6 +11,9 @@ import java.util.List;
 
 @Repository
 public class StaffDAO extends BaseDAO { // Inherits database connection logic and credentials from BaseDAO
+
+    // Initialize the logger for this class
+    private static final Logger logger = LoggerFactory.getLogger(StaffDAO.class);
 
     /**
      * Retrieves all staff members assigned to the 'Housekeeping' role.
@@ -36,8 +41,9 @@ public class StaffDAO extends BaseDAO { // Inherits database connection logic an
                 ));
             }
         } catch (SQLException e) {
-            // Log any SQL errors to the console for debugging
-            e.printStackTrace();
+            // Replaced printStackTrace with proper logging and exception handling
+            logger.error("Failed to retrieve housekeeping staff from the database", e);
+            throw new RuntimeException("Database error while fetching housekeeping staff", e);
         }
         return staffList;
     }

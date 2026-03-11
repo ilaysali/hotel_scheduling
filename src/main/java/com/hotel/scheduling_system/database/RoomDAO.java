@@ -2,14 +2,18 @@ package com.hotel.scheduling_system.database;
 
 import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.model.RoomType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
-
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 @Repository
 public class RoomDAO extends BaseDAO { // Inherits database connection logic and credentials from BaseDAO
+
+    // Initialize the logger for this class
+    private static final Logger logger = LoggerFactory.getLogger(RoomDAO.class);
 
     /**
      * Retrieves the complete list of rooms from the hotel database.
@@ -32,13 +36,12 @@ public class RoomDAO extends BaseDAO { // Inherits database connection logic and
                 rooms.add(new Room(
                         rs.getInt("room_id"),
                         rs.getInt("room_number"),
-                        // Converts the string from the database to a RoomType Enum (case-insensitive)
                         RoomType.valueOf(rs.getString("room_type").toUpperCase())
                 ));
             }
         } catch (SQLException e) {
-            // Logs database errors for debugging
-            e.printStackTrace();
+            logger.error("Failed to retrieve all rooms from the database", e);
+            throw new RuntimeException("Database error while fetching rooms", e);
         }
         return rooms;
     }

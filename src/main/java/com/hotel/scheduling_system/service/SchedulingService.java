@@ -45,7 +45,7 @@ public class SchedulingService {
 
             for (Reservation res : entry.getValue()) {
                 // שומרים את השידוך בין מזהה ההזמנה למזהה החדר הפיזי
-                reservationDAO.updateReservationRoom(res.id(), assignedRoom.getId());
+                reservationDAO.updateReservationRoom(res.id(), assignedRoom.id());
             }
         }
     }

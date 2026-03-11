@@ -15,6 +15,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -26,6 +28,8 @@ import java.util.Set;
 
 @Component
 public class MainView extends VBox {
+
+    private static final Logger logger = LoggerFactory.getLogger(MainView.class);
 
     private final AppController appController;
     private final GanttChart ganttChart;
@@ -110,17 +114,31 @@ public class MainView extends VBox {
         generateBtn.setOnAction(event -> {
             try {
                 Map<String, Object> results = appController.onGenerateScheduleClicked();
-                currentAssignments = (Map<Room, List<Reservation>>) results.get("ASSIGNMENTS");
-                currentUnassigned = (List<Reservation>) results.get("UNASSIGNED");
+
+                // Suppressing the unavoidable type erasure warnings for Maps and Lists
+                @SuppressWarnings("unchecked")
+                Map<Room, List<Reservation>> assignments = (Map<Room, List<Reservation>>) results.get("ASSIGNMENTS");
+                currentAssignments = assignments;
+
+                @SuppressWarnings("unchecked")
+                List<Reservation> unassigned = (List<Reservation>) results.get("UNASSIGNED");
+                currentUnassigned = unassigned;
+
                 Double fitnessScore = (Double) results.get("FITNESS_SCORE");
 
                 approvedDowngrades.clear();
                 refreshDashboard();
                 if (fitnessScore != null) fitnessLabel.setText(String.format("AI Fitness Score: %,.0f", fitnessScore));
+
             } catch (IllegalArgumentException e) {
                 Alert errorAlert = new Alert(Alert.AlertType.ERROR, e.getMessage());
                 errorAlert.showAndWait();
-            } catch (Exception e) { e.printStackTrace(); }
+            } catch (Exception e) {
+                // Replacing printStackTrace with robust logging and UI feedback
+                logger.error("Error occurred while generating the AI schedule", e);
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR, "An unexpected error occurred while generating the schedule. Check logs for details.");
+                errorAlert.showAndWait();
+            }
         });
 
         saveBtn.setOnAction(event -> {
@@ -140,7 +158,6 @@ public class MainView extends VBox {
         saveBtn.setDisable(currentAssignments.isEmpty() || hasPendingDowngrades);
     }
 
-    // --- חלון דו"ח הניקיונות המטורף שלנו ---
     private void openHousekeepingDialog() {
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Daily Housekeeping Report");
@@ -150,13 +167,13 @@ public class MainView extends VBox {
         HBox topControls = new HBox(10);
         topControls.setAlignment(Pos.CENTER_LEFT);
 
-        DatePicker datePicker = new DatePicker(LocalDate.of(2026, 4, 10)); // תאריך ברירת מחדל מהעומס שלנו
+        DatePicker datePicker = new DatePicker(LocalDate.of(2026, 4, 10)); // Default date from our high-occupancy scenario
         Button loadBtn = new Button("Generate Tasks");
         loadBtn.setStyle("-fx-base: #FFC107; -fx-font-weight: bold;");
 
         topControls.getChildren().addAll(new Label("Select Date:"), datePicker, loadBtn);
 
-        // טבלת משימות מקצועית (TableView)
+        // Professional task table (TableView)
         TableView<HousekeepingTask> table = new TableView<>();
 
         TableColumn<HousekeepingTask, Integer> roomCol = new TableColumn<>("Room");
@@ -168,7 +185,11 @@ public class MainView extends VBox {
         TableColumn<HousekeepingTask, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().status()));
 
-        table.getColumns().addAll(roomCol, staffCol, statusCol);
+        // Fixing varargs generic array creation warning by adding columns individually
+        table.getColumns().add(roomCol);
+        table.getColumns().add(staffCol);
+        table.getColumns().add(statusCol);
+
         table.setPrefWidth(350);
         table.setPrefHeight(300);
 
@@ -177,25 +198,25 @@ public class MainView extends VBox {
             if (date != null) {
                 List<Integer> activeRooms = new ArrayList<>();
 
-                // ה"קסם": סורקים את התוצאות שה-AI קבע למלון!
+                // The "magic": scanning the results the AI determined for the hotel!
                 if (currentAssignments != null) {
                     for (Map.Entry<Room, List<Reservation>> entry : currentAssignments.entrySet()) {
-                        // אם יש בחדר הזה הזמנה שנופלת על התאריך הנבחר - הוא דורש ניקיון!
+                        // If this room has a reservation that falls on the selected date - it needs cleaning!
                         boolean needsCleaning = entry.getValue().stream().anyMatch(res ->
                                 !date.isBefore(res.startDate()) && !date.isAfter(res.endDate())
                         );
                         if (needsCleaning) {
-                            activeRooms.add(entry.getKey().getId());
+                            activeRooms.add(entry.getKey().id()); // Updated to use the record accessor id()
                         }
                     }
                 }
 
-                // מנגנון ביטחון: אם עוד לא יצרנו לוח חכם, ניתן משימות לכל החדרים כברירת מחדל
+                // Failsafe: if we haven't generated a smart schedule yet, assign tasks to all rooms by default
                 if (activeRooms.isEmpty()) {
                     activeRooms.addAll(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
                 }
 
-                // שולחים ל-Controller לייצר ולשמור את המשימות במסד הנתונים
+                // Sending to Controller to generate and save tasks in the database
                 List<HousekeepingTask> tasks = appController.generateAndGetHousekeepingReport(date, activeRooms);
                 table.getItems().setAll(tasks);
             }
@@ -250,7 +271,8 @@ public class MainView extends VBox {
             }
             if (start == null || end == null || !end.isAfter(start)) {
                 new Alert(Alert.AlertType.ERROR, "The End Date must be strictly after the Start Date.").showAndWait();
-                event.consume(); return;
+                event.consume();
+                // Removed the unnecessary return statement here
             }
         });
 

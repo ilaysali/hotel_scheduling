@@ -12,7 +12,6 @@ import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.model.Staff;
 import com.hotel.scheduling_system.service.SchedulingService;
 import org.springframework.stereotype.Component;
-
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;

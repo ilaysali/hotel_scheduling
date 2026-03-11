@@ -3,7 +3,6 @@ package com.hotel.scheduling_system.controller;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.model.ScheduleSolution;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +19,7 @@ public class PostProcessor {
         Map<Integer, Room> roomMap = new HashMap<>();
         for (Room room : rooms) {
             roomAssignments.put(room, new ArrayList<>());
-            roomMap.put(room.getId(), room);
+            roomMap.put(room.id(), room);
         }
 
         int[] genes = winningSolution.getGenes();

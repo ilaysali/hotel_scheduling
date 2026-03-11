@@ -1,8 +1,9 @@
 package com.hotel.scheduling_system.database;
 
 import com.hotel.scheduling_system.model.HousekeepingTask;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
-
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -10,6 +11,9 @@ import java.util.List;
 
 @Repository
 public class HousekeepingDAO extends BaseDAO { // Inherits database connection logic from BaseDAO
+
+    // Initialize the logger for this class
+    private static final Logger logger = LoggerFactory.getLogger(HousekeepingDAO.class);
 
     /**
      * Assigns cleaning tasks to staff members using a Round-robin algorithm.
@@ -26,21 +30,22 @@ public class HousekeepingDAO extends BaseDAO { // Inherits database connection l
 
         // Using getConnection() from BaseDAO to establish the link
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(insertQuery)) {
+             PreparedStatement preparedStatement = conn.prepareStatement(insertQuery)) {
 
             int staffIndex = 0;
             for (int roomId : roomIds) {
-                pstmt.setInt(1, roomId);
+                preparedStatement.setInt(1, roomId);
                 // Round-robin logic: assign room to the next staff member in the list
-                pstmt.setInt(2, staffIds.get(staffIndex % staffIds.size()));
-                pstmt.setDate(3, java.sql.Date.valueOf(date));
-                pstmt.addBatch();
+                preparedStatement.setInt(2, staffIds.get(staffIndex % staffIds.size()));
+                preparedStatement.setDate(3, java.sql.Date.valueOf(date));
+                preparedStatement.addBatch();
                 staffIndex++;
             }
-            pstmt.executeBatch();
+            preparedStatement.executeBatch();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Failed to assign housekeeping tasks for date: {}", date, e);
+            throw new RuntimeException("Database error while assigning tasks", e);
         }
     }
 
@@ -60,10 +65,10 @@ public class HousekeepingDAO extends BaseDAO { // Inherits database connection l
                 """;
 
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(query)) {
+             PreparedStatement preparedStatement = conn.prepareStatement(query)) {
 
-            pstmt.setDate(1, java.sql.Date.valueOf(date));
-            try (ResultSet rs = pstmt.executeQuery()) {
+            preparedStatement.setDate(1, java.sql.Date.valueOf(date));
+            try (ResultSet rs = preparedStatement.executeQuery()) {
                 while (rs.next()) {
                     tasks.add(new HousekeepingTask(
                             rs.getInt("schedule_id"),
@@ -75,7 +80,8 @@ public class HousekeepingDAO extends BaseDAO { // Inherits database connection l
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Failed to retrieve housekeeping tasks for date: {}", date, e);
+            throw new RuntimeException("Database error while fetching tasks", e);
         }
         return tasks;
     }
@@ -86,11 +92,12 @@ public class HousekeepingDAO extends BaseDAO { // Inherits database connection l
     private void clearTasksForDate(LocalDate date) {
         String query = "DELETE FROM Housekeeping_Schedule WHERE cleaning_date = ?";
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(query)) {
-            pstmt.setDate(1, java.sql.Date.valueOf(date));
-            pstmt.executeUpdate();
+             PreparedStatement preparedStatement = conn.prepareStatement(query)) {
+            preparedStatement.setDate(1, java.sql.Date.valueOf(date));
+            preparedStatement.executeUpdate();
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Failed to clear existing tasks for date: {}", date, e);
+            throw new RuntimeException("Database error while clearing old tasks", e);
         }
     }
 }

@@ -2,8 +2,9 @@ package com.hotel.scheduling_system.database;
 
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.RoomType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
-
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -12,26 +13,28 @@ import java.util.List;
 @Repository
 public class ReservationDAO extends BaseDAO { // Inherits database connection logic from BaseDAO
 
+    private static final Logger logger = LoggerFactory.getLogger(ReservationDAO.class);
+
     /**
      * Retrieves all reservations from the database, joining with Rooms and Guests
      * to provide a complete overview for the scheduling system.
      */
     public List<Reservation> getAllReservations() {
         List<Reservation> reservations = new ArrayList<>();
+
         String query = """
-                SELECT 
-                    r.reservation_id AS id, 
+                SELECT
+                    r.reservation_id AS id,
                     CONCAT(g.first_name, ' ', g.last_name) AS guest_name,
-                    rr.start_date, 
-                    rr.end_date, 
-                    rm.room_type 
+                    rr.start_date,
+                    rr.end_date,
+                    rm.room_type
                 FROM Reservations r
                 JOIN Reservation_Rooms rr ON r.reservation_id = rr.reservation_id
                 JOIN Rooms rm ON rr.room_id = rm.room_id
                 JOIN Guests g ON r.guest_id = g.guest_id
                 """;
 
-        // Using getConnection() from BaseDAO
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
@@ -45,7 +48,10 @@ public class ReservationDAO extends BaseDAO { // Inherits database connection lo
                         RoomType.valueOf(rs.getString("room_type").toUpperCase())
                 ));
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            logger.error("Failed to retrieve all reservations from the database", e);
+            throw new RuntimeException("Database error while fetching reservations", e);
+        }
         return reservations;
     }
 
@@ -56,11 +62,14 @@ public class ReservationDAO extends BaseDAO { // Inherits database connection lo
     public void updateReservationRoom(int reservationId, int newRoomId) {
         String query = "UPDATE Reservation_Rooms SET room_id = ? WHERE reservation_id = ?";
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(query)) {
-            pstmt.setInt(1, newRoomId);
-            pstmt.setInt(2, reservationId);
-            pstmt.executeUpdate();
-        } catch (SQLException e) { e.printStackTrace(); }
+             PreparedStatement preparedStatement = conn.prepareStatement(query)) {
+            preparedStatement.setInt(1, newRoomId);
+            preparedStatement.setInt(2, reservationId);
+            preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("Failed to update room for reservation ID: {}", reservationId, e);
+            throw new RuntimeException("Database error while updating reservation room", e);
+        }
     }
 
     /**
@@ -80,28 +89,31 @@ public class ReservationDAO extends BaseDAO { // Inherits database connection lo
 
             // 2. Find a dummy room ID matching the requested room type to initialize the record
             int dummyRoomId = -1;
-            try (PreparedStatement pstmt = conn.prepareStatement("SELECT room_id FROM Rooms WHERE room_type = ? LIMIT 1")) {
-                pstmt.setString(1, roomType);
-                try (ResultSet rs = pstmt.executeQuery()) {
+            try (PreparedStatement preparedStatement = conn.prepareStatement("SELECT room_id FROM Rooms WHERE room_type = ? LIMIT 1")) {
+                preparedStatement.setString(1, roomType);
+                try (ResultSet rs = preparedStatement.executeQuery()) {
                     if (rs.next()) dummyRoomId = rs.getInt("room_id");
                 }
             }
 
             // 3. Save entry in the main Reservations table (Link between Reservation and Guest)
-            try (PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Reservations (reservation_id, guest_id) VALUES (?, ?)")) {
-                pstmt.setInt(1, nextResId);
-                pstmt.setInt(2, guestId);
-                pstmt.executeUpdate();
+            try (PreparedStatement preparedStatement = conn.prepareStatement("INSERT INTO Reservations (reservation_id, guest_id) VALUES (?, ?)")) {
+                preparedStatement.setInt(1, nextResId);
+                preparedStatement.setInt(2, guestId);
+                preparedStatement.executeUpdate();
             }
 
             // 4. Save entry in the Reservation_Rooms table (Dates and room requirements)
-            try (PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Reservation_Rooms (reservation_id, room_id, start_date, end_date) VALUES (?, ?, ?, ?)")) {
-                pstmt.setInt(1, nextResId);
-                pstmt.setInt(2, dummyRoomId);
-                pstmt.setDate(3, java.sql.Date.valueOf(startDate));
-                pstmt.setDate(4, java.sql.Date.valueOf(endDate));
-                pstmt.executeUpdate();
+            try (PreparedStatement preparedStatement = conn.prepareStatement("INSERT INTO Reservation_Rooms (reservation_id, room_id, start_date, end_date) VALUES (?, ?, ?, ?)")) {
+                preparedStatement.setInt(1, nextResId);
+                preparedStatement.setInt(2, dummyRoomId);
+                preparedStatement.setDate(3, java.sql.Date.valueOf(startDate));
+                preparedStatement.setDate(4, java.sql.Date.valueOf(endDate));
+                preparedStatement.executeUpdate();
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            logger.error("Failed to add new reservation for guest ID: {}", guestId, e);
+            throw new RuntimeException("Database error while adding new reservation", e);
+        }
     }
 }

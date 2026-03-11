@@ -13,6 +13,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
+import lombok.Setter;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -24,7 +25,11 @@ import java.util.function.Consumer;
 
 public class GanttChart extends VBox {
     private final Pane drawingPane;
+
+    @Setter
     private Consumer<Reservation> onRejectCallback;
+
+    @Setter
     private Consumer<Reservation> onApproveCallback;
 
     public GanttChart() {
@@ -42,24 +47,7 @@ public class GanttChart extends VBox {
         getChildren().addAll(title, scrollPane);
     }
 
-    public void setOnRejectCallback(Consumer<Reservation> onRejectCallback) {
-        this.onRejectCallback = onRejectCallback;
-    }
-
-    public void setOnApproveCallback(Consumer<Reservation> onApproveCallback) {
-        this.onApproveCallback = onApproveCallback;
-    }
-
-    private int getRoomRank(String roomType) {
-        return switch (roomType) {
-            case "SINGLE" -> 1;
-            case "DOUBLE" -> 2;
-            case "SUITE" -> 3;
-            default -> 0;
-        };
-    }
-
-    // הפונקציה עכשיו מקבלת גם את רשימת השנמוכים שאושרו, ומחזירה האם נשארו כאלה שממתינים
+    // The function now also receives the list of approved downgrades, and returns whether there are still pending ones
     public boolean updateData(Map<Room, List<Reservation>> assignments, Set<Reservation> approvedDowngrades) {
         drawingPane.getChildren().clear();
         if (assignments == null || assignments.isEmpty()) return false;
@@ -111,7 +99,7 @@ public class GanttChart extends VBox {
             Room room = entry.getKey();
             List<Reservation> reservations = entry.getValue();
 
-            Label roomLabel = new Label("Room " + room.getRoomNumber() + "\n(" + room.getType() + ")");
+            Label roomLabel = new Label("Room " + room.roomNumber() + "\n(" + room.type() + ")");
             roomLabel.setLayoutX(10);
             roomLabel.setLayoutY(yOffset);
             roomLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
@@ -138,26 +126,27 @@ public class GanttChart extends VBox {
                 bar.setArcWidth(10);
                 bar.setArcHeight(10);
 
-                int requestedRank = getRoomRank(res.roomType().name());
-                int assignedRank = getRoomRank(room.getType().name());
+                // Utilizing the RoomType enum getRank() directly to replace the old switch statement!
+                int requestedRank = res.roomType().getRank();
+                int assignedRank = room.type().getRank();
 
                 boolean isDowngrade = assignedRank < requestedRank;
                 boolean isPendingDowngrade = isDowngrade && !approvedDowngrades.contains(res);
                 boolean isUpgrade = assignedRank > requestedRank;
 
-                // צביעה חכמה לפי הסטטוס
+                // Smart coloring based on status
                 if (isPendingDowngrade) {
                     hasPendingDowngrades = true;
                     bar.setStroke(Color.RED);
                     bar.setStrokeWidth(2.5);
-                    bar.getStrokeDashArray().addAll(4d, 4d); // אדום מקווקו (דורש תשומת לב!)
+                    bar.getStrokeDashArray().addAll(4d, 4d); // Dashed red (requires attention!)
                 } else if (isDowngrade) {
                     bar.setStroke(Color.ORANGE);
-                    bar.setStrokeWidth(2); // כתום רגיל (אומר שהמנהל אישר את השנמוך)
+                    bar.setStrokeWidth(2); // Solid orange (means the manager approved the downgrade)
                 } else if (isUpgrade) {
                     bar.setStroke(Color.BLUE);
                     bar.setStrokeWidth(1.5);
-                    bar.getStrokeDashArray().addAll(2d, 2d); // כחול מקווקו לשדרוג (רק לידיעה, לא דורש אישור)
+                    bar.getStrokeDashArray().addAll(2d, 2d); // Dashed blue for upgrade (for info only, doesn't require approval)
                 } else {
                     bar.setStroke(Color.BLACK);
                     bar.setStrokeWidth(1);
@@ -174,9 +163,9 @@ public class GanttChart extends VBox {
 
                 if (isDowngrade) {
                     String status = isPendingDowngrade ? "(PENDING APPROVAL)" : "(APPROVED)";
-                    tooltipText += "\n\n⚠️ ALERT: Downgrade to " + room.getType() + "! " + status;
+                    tooltipText += "\n\n⚠️ ALERT: Downgrade to " + room.type() + "! " + status;
                 } else if (isUpgrade) {
-                    tooltipText += "\n\n✨ INFO: Upgrade to " + room.getType();
+                    tooltipText += "\n\n✨ INFO: Upgrade to " + room.type();
                 }
 
                 Tooltip tooltip = new Tooltip(tooltipText);
@@ -188,9 +177,9 @@ public class GanttChart extends VBox {
 
                 ContextMenu contextMenu = new ContextMenu();
 
-                // הוספת אפשרות האישור (רק אם זה שנמוך שעוד לא אושר)
+                // Adding the approved option (only if it's a downgrade that hasn't been approved yet)
                 if (isPendingDowngrade) {
-                    MenuItem approveItem = new MenuItem("✅ Approve Downgrade");
+                    MenuItem approveItem = new MenuItem("Approve Downgrade");
                     approveItem.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
                     approveItem.setOnAction(e -> {
                         if (onApproveCallback != null) onApproveCallback.accept(res);
@@ -198,7 +187,7 @@ public class GanttChart extends VBox {
                     contextMenu.getItems().add(approveItem);
                 }
 
-                MenuItem rejectItem = new MenuItem("❌ Reject Assignment (Move to Unassigned)");
+                MenuItem rejectItem = new MenuItem("Reject Assignment (Move to Unassigned)");
                 rejectItem.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
                 rejectItem.setOnAction(e -> {
                     if (onRejectCallback != null) onRejectCallback.accept(res);

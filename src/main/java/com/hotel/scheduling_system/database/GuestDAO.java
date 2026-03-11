@@ -1,14 +1,18 @@
 package com.hotel.scheduling_system.database;
 
 import com.hotel.scheduling_system.model.Guest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
-
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 @Repository
-public class GuestDAO extends BaseDAO { // Inherits database credentials and connection logic from BaseDAO
+public class GuestDAO extends BaseDAO {
+
+    // Initialize the logger for this class
+    private static final Logger logger = LoggerFactory.getLogger(GuestDAO.class);
 
     /**
      * Retrieves all guests from the database.
@@ -18,7 +22,6 @@ public class GuestDAO extends BaseDAO { // Inherits database credentials and con
         List<Guest> guests = new ArrayList<>();
         String query = "SELECT guest_id, first_name, last_name FROM Guests";
 
-        // Using getConnection() from the parent class (BaseDAO)
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
@@ -31,7 +34,9 @@ public class GuestDAO extends BaseDAO { // Inherits database credentials and con
                 ));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            // Replaced printStackTrace with proper logging
+            logger.error("Failed to retrieve all guests from the database", e);
+            throw new RuntimeException("Database error while fetching guests", e);
         }
         return guests;
     }
@@ -50,34 +55,46 @@ public class GuestDAO extends BaseDAO { // Inherits database credentials and con
         // 1. Check if the guest already exists
         String findQuery = "SELECT guest_id FROM Guests WHERE first_name = ? AND last_name = ?";
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(findQuery)) {
-            pstmt.setString(1, firstName);
-            pstmt.setString(2, lastName);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getInt("guest_id"); // Found - returning existing ID
+             PreparedStatement preparedStatement = conn.prepareStatement(findQuery)) {
+            preparedStatement.setString(1, firstName);
+            preparedStatement.setString(2, lastName);
+
+            try (ResultSet rs = preparedStatement.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("guest_id"); // Found - returning existing ID
+                }
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            logger.error("Failed to find guest by name: {} {}", firstName, lastName, e);
+            throw new RuntimeException("Database error while finding guest", e);
+        }
 
         // 2. If not found - calculate the next available ID
         int nextId = 1;
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT COALESCE(MAX(guest_id), 0) + 1 AS next_id FROM Guests")) {
-            if (rs.next()) nextId = rs.getInt("next_id");
-        } catch (SQLException e) { e.printStackTrace(); }
+            if (rs.next()) {
+                nextId = rs.getInt("next_id");
+            }
+        } catch (SQLException e) {
+            logger.error("Failed to calculate next guest ID", e);
+            throw new RuntimeException("Database error while calculating next guest ID", e);
+        }
 
         // 3. Save the new guest to the database
         String insertQuery = "INSERT INTO Guests (guest_id, first_name, last_name, email) VALUES (?, ?, ?, ?)";
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(insertQuery)) {
-            pstmt.setInt(1, nextId);
-            pstmt.setString(2, firstName);
-            pstmt.setString(3, lastName);
-            pstmt.setString(4, "new_guest@example.com"); // Default email for new entries
-            pstmt.executeUpdate();
-        } catch (SQLException e) { e.printStackTrace(); }
-
+             PreparedStatement preparedStatement = conn.prepareStatement(insertQuery)) {
+            preparedStatement.setInt(1, nextId);
+            preparedStatement.setString(2, firstName);
+            preparedStatement.setString(3, lastName);
+            preparedStatement.setString(4, "new_guest@example.com"); // Default email for new entries
+            preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            logger.error("Failed to insert new guest: {} {}", firstName, lastName, e);
+            throw new RuntimeException("Database error while inserting new guest", e);
+        }
         return nextId;
     }
 }
