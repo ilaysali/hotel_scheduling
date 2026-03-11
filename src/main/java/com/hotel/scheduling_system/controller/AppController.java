@@ -11,12 +11,14 @@ import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.model.Staff;
 import com.hotel.scheduling_system.service.SchedulingService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 @Component
+@RequiredArgsConstructor
 public class AppController {
 
     private final SchedulingService schedulingService;
@@ -25,17 +27,6 @@ public class AppController {
     private final ReservationDAO reservationDAO;
     private final StaffDAO staffDAO;
     private final HousekeepingDAO housekeepingDAO;
-
-    public AppController(SchedulingService schedulingService, MockDataGenerator mockDataGenerator,
-                         GuestDAO guestDAO, ReservationDAO reservationDAO,
-                         StaffDAO staffDAO, HousekeepingDAO housekeepingDAO) {
-        this.schedulingService = schedulingService;
-        this.mockDataGenerator = mockDataGenerator;
-        this.guestDAO = guestDAO;
-        this.reservationDAO = reservationDAO;
-        this.staffDAO = staffDAO;
-        this.housekeepingDAO = housekeepingDAO;
-    }
 
     public Map<String, Object> onGenerateScheduleClicked() { return schedulingService.generateSchedule(); }
     public void onSaveScheduleClicked(Map<Room, List<Reservation>> assignments) { schedulingService.saveScheduleToDatabase(assignments); }
@@ -47,13 +38,12 @@ public class AppController {
     public List<HousekeepingTask> generateAndGetHousekeepingReport(LocalDate date, List<Integer> roomIdsToClean) {
         List<Staff> cleaners = staffDAO.getHousekeepingStaff();
 
-        // אם יש לנו מנקים וגם חדרים שדורשים ניקוי - חלק להם את העבודה ב-DB!
         if (!cleaners.isEmpty() && roomIdsToClean != null && !roomIdsToClean.isEmpty()) {
             List<Integer> staffIds = cleaners.stream().map(Staff::id).toList();
             housekeepingDAO.assignTasksForDate(date, roomIdsToClean, staffIds);
         }
 
-        // אחרי שנוצרו המשימות ב-DB, שולפים אותן לתצוגה
+        // After the tasks are created in the DB, fetch them for display
         return housekeepingDAO.getTasksForDate(date);
     }
 }

@@ -62,7 +62,6 @@ public class MockDataGenerator extends BaseDAO {
         }
     }
 
-    // --- Extracted Helper Methods ---
 
     private String generateGuestsSql() {
         StringBuilder guestsSql = new StringBuilder("INSERT INTO Guests (guest_id, first_name, last_name, email) VALUES ");

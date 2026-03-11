@@ -15,7 +15,7 @@ public class PostProcessor {
         List<Reservation> unassignedList = new ArrayList<>();
         Map<Room, List<Reservation>> roomAssignments = new HashMap<>();
 
-        // יצירת HashMap לחדרים - שומר על ביצועי O(1) בשליפת החדר
+        // Create HashMap for rooms to maintain O(1) retrieval performance
         Map<Integer, Room> roomMap = new HashMap<>();
         for (Room room : rooms) {
             roomAssignments.put(room, new ArrayList<>());
@@ -24,16 +24,16 @@ public class PostProcessor {
 
         int[] genes = winningSolution.getGenes();
 
-        // חוזרים לרוץ על האינדקס הפשוט i שמתאים בין הרשימה למערך הגנים
+        // Loop using the simple index i that maps the reservations list to the genes array
         for (int i = 0; i < allReservations.size(); i++) {
 
-            // שליפה ב-O(1) (בהנחה שזה ArrayList)
+            // O(1) retrieval (assuming it's an ArrayList)
             Reservation currentRes = allReservations.get(i);
 
-            // הגן במקום ה-i מכיל את ה-ID של החדר שהוקצה להזמנה במקום ה-i
+            // The gene at index i contains the ID of the room assigned to the reservation at index i
             int assignedRoomId = genes[i];
 
-            // שליפת החדר המוקצה מתוך המילון ב-O(1)
+            // Retrieve the assigned room from the dictionary in O(1)
             Room assignedRoom = roomMap.get(assignedRoomId);
 
             if (assignedRoom == null) {
