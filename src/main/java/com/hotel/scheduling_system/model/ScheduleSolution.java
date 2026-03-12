@@ -28,11 +28,15 @@ public class ScheduleSolution {
         double penalties = 0;
         double bonuses = 0;
 
+        // Weights for existing constraints
         double W_HARD = 100000.0;
         double W_DOWNGRADE_PER_NIGHT = 2000.0;
         double W_UPGRADE_PER_NIGHT = 200.0;
         double W_FRAGMENTATION = 1000.0;
         double B_PERFECT_MATCH = 500.0;
+
+        // Weight for the new soft constraint
+        double W_VIEW_MISMATCH = 400.0;
 
         Map<Integer, Room> roomMap = new HashMap<>();
         Map<Integer, List<Reservation>> roomSchedules = new HashMap<>();
@@ -42,7 +46,7 @@ public class ScheduleSolution {
             roomSchedules.put(room.id(), new ArrayList<>());
         }
 
-        // First pass: Build schedule per room and check soft constraints
+        // First pass: Build schedule per room and check direct room-reservation constraints
         for (int i = 0; i < reservations.size(); i++) {
             Reservation currentRes = reservations.get(i);
             int assignedRoomId = genes[i];
@@ -52,6 +56,7 @@ public class ScheduleSolution {
             if (assignedRoom != null) {
                 roomSchedules.get(assignedRoomId).add(currentRes);
 
+                // Check room type differences
                 if (currentRes.roomType() != assignedRoom.type()) {
                     int requestedRank = currentRes.roomType().getRank();
                     int assignedRank = assignedRoom.type().getRank();
@@ -67,10 +72,18 @@ public class ScheduleSolution {
                         penalties += (W_UPGRADE_PER_NIGHT * nights * (assignedRank - requestedRank));
                     }
                 }
+
+                // --- Customer Soft Constraint Evaluation ---
+                // Soft Constraint: View preference check
+                if (currentRes.getPreferredView() != null) {
+                    if (!currentRes.getPreferredView().equals(assignedRoom.getView())) {
+                        penalties += W_VIEW_MISMATCH;
+                    }
+                }
             }
         }
 
-        // Second pass: Checks overlaps gaps and sequences
+        // Second pass: Checks overlaps, gaps, and sequences
         for (List<Reservation> schedule : roomSchedules.values()) {
             if (schedule.size() > 1) {
                 schedule.sort(Comparator.comparing(Reservation::startDate));
@@ -79,7 +92,7 @@ public class ScheduleSolution {
                     Reservation current = schedule.get(i);
                     Reservation next = schedule.get(i + 1);
 
-                    // Because array is sorted, we only need to check overlap with the next one! O(1) operation
+                    // Because array is sorted, we only need to check overlap with the next one O(1)
                     if (current.overlaps(next)) {
                         penalties += W_HARD;
                     } else {

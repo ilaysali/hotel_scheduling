@@ -5,11 +5,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.Random;
 
 @Component
 public class MockDataGenerator extends BaseDAO {
 
     private static final Logger logger = LoggerFactory.getLogger(MockDataGenerator.class);
+
+    // Added a Random instance to randomize view preferences for guests
+    private final Random random = new Random();
+    private final String[] views = {"Sea", "Pool", "City", "Garden"};
 
     /**
      * Resets the database by clearing all tables and generating a fresh set of mock data.
@@ -34,17 +39,17 @@ public class MockDataGenerator extends BaseDAO {
 
             logger.info("Generating Balanced Crowded Scenario: 20 Rooms, 100 Reservations (April-May)...");
 
-            // 1. Define 20 Rooms with different types and prices
-            stmt.executeUpdate("INSERT INTO Rooms (room_id, room_number, room_type, price_per_night) VALUES " +
-                    "(1, 101, 'SINGLE', 100), (2, 102, 'SINGLE', 100), (3, 103, 'SINGLE', 100), (4, 104, 'SINGLE', 100), (5, 105, 'SINGLE', 100), " +
-                    "(6, 201, 'DOUBLE', 150), (7, 202, 'DOUBLE', 150), (8, 203, 'DOUBLE', 150), (9, 204, 'DOUBLE', 150), (10, 205, 'DOUBLE', 150), " +
-                    "(11, 206, 'DOUBLE', 150), (12, 207, 'DOUBLE', 150), (13, 208, 'DOUBLE', 150), (14, 209, 'DOUBLE', 150), (15, 210, 'DOUBLE', 150), " +
-                    "(16, 301, 'SUITE', 300), (17, 302, 'SUITE', 300), (18, 303, 'SUITE', 300), (19, 304, 'SUITE', 300), (20, 305, 'SUITE', 300)");
+            // 1. Define 20 Rooms with different types and views (Price is removed, handled by Enum)
+            stmt.executeUpdate("INSERT INTO Rooms (room_id, room_number, room_type, room_view) VALUES " +
+                    "(1, 101, 'SINGLE', 'City'), (2, 102, 'SINGLE', 'City'), (3, 103, 'SINGLE', 'Garden'), (4, 104, 'SINGLE', 'Garden'), (5, 105, 'SINGLE', 'Pool'), " +
+                    "(6, 201, 'DOUBLE', 'Sea'), (7, 202, 'DOUBLE', 'Sea'), (8, 203, 'DOUBLE', 'Pool'), (9, 204, 'DOUBLE', 'Pool'), (10, 205, 'DOUBLE', 'City'), " +
+                    "(11, 206, 'DOUBLE', 'City'), (12, 207, 'DOUBLE', 'Garden'), (13, 208, 'DOUBLE', 'Garden'), (14, 209, 'DOUBLE', 'Sea'), (15, 210, 'DOUBLE', 'Sea'), " +
+                    "(16, 301, 'SUITE', 'Sea'), (17, 302, 'SUITE', 'Sea'), (18, 303, 'SUITE', 'Pool'), (19, 304, 'SUITE', 'City'), (20, 305, 'SUITE', 'Garden')");
 
             // 2. Create 100 Mock Guests
             stmt.executeUpdate(generateGuestsSql());
 
-            // 3. Create 100 Reservation "Envelopes"
+            // 3. Create 100 Reservation "Envelopes" with view preferences
             stmt.executeUpdate(generateReservationsSql());
 
             // 4. Assign Rooms - Two months (April-May) - Dense but logical scheduling
@@ -73,9 +78,11 @@ public class MockDataGenerator extends BaseDAO {
     }
 
     private String generateReservationsSql() {
-        StringBuilder resSql = new StringBuilder("INSERT INTO Reservations (reservation_id, guest_id) VALUES ");
+        StringBuilder resSql = new StringBuilder("INSERT INTO Reservations (reservation_id, guest_id, preferred_view) VALUES ");
         for (int i = 1; i <= 100; i++) {
-            resSql.append(String.format("(%d, %d)", i, i));
+            // Assign a random view, with a 20% chance of no preference (NULL)
+            String preferredView = (random.nextInt(5) == 0) ? "NULL" : "'" + views[random.nextInt(views.length)] + "'";
+            resSql.append(String.format("(%d, %d, %s)", i, i, preferredView));
             if (i < 100) resSql.append(", ");
         }
         return resSql.toString();

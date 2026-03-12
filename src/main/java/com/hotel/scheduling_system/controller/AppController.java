@@ -32,7 +32,12 @@ public class AppController {
     public void onSaveScheduleClicked(Map<Room, List<Reservation>> assignments) { schedulingService.saveScheduleToDatabase(assignments); }
     public void onLoadMockDataClicked() { mockDataGenerator.resetAndGenerate(); }
     public List<Guest> getAllGuests() { return guestDAO.getAllGuests(); }
-    public void createNewReservation(int guestId, String roomType, LocalDate startDate, LocalDate endDate) { reservationDAO.addNewReservation(guestId, roomType, startDate, endDate); }
+
+    // Updated to include preferredView
+    public void createNewReservation(int guestId, String roomType, LocalDate startDate, LocalDate endDate, String preferredView) {
+        reservationDAO.addNewReservation(guestId, roomType, startDate, endDate, preferredView);
+    }
+
     public int getOrCreateGuest(String fullName) { return guestDAO.getOrCreateGuest(fullName); }
 
     public List<HousekeepingTask> generateAndGetHousekeepingReport(LocalDate date, List<Integer> roomIdsToClean) {

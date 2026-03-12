@@ -99,9 +99,10 @@ public class GanttChart extends VBox {
             Room room = entry.getKey();
             List<Reservation> reservations = entry.getValue();
 
-            Label roomLabel = new Label("Room " + room.roomNumber() + "\n(" + room.type() + ")");
+            // Updated room label to include the view
+            Label roomLabel = new Label("Room " + room.roomNumber() + "\n(" + room.type() + ")\n[" + room.view() + "]");
             roomLabel.setLayoutX(10);
-            roomLabel.setLayoutY(yOffset);
+            roomLabel.setLayoutY(yOffset - 10); // Shifted slightly up to accommodate the extra line
             roomLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
             drawingPane.getChildren().add(roomLabel);
 
@@ -134,6 +135,9 @@ public class GanttChart extends VBox {
                 boolean isPendingDowngrade = isDowngrade && !approvedDowngrades.contains(res);
                 boolean isUpgrade = assignedRank > requestedRank;
 
+                // Check for view mismatch
+                boolean isViewMismatch = res.preferredView() != null && !res.preferredView().equals(room.view());
+
                 // Smart coloring based on status
                 if (isPendingDowngrade) {
                     hasPendingDowngrades = true;
@@ -157,15 +161,23 @@ public class GanttChart extends VBox {
                 resLabel.setLayoutY(yOffset + 5);
                 resLabel.setStyle("-fx-font-size: 11px;");
 
+                // Updated tooltip to include view information
+                String viewRequestedText = (res.preferredView() != null) ? res.preferredView() : "Any";
+
                 String tooltipText = "Guest Name: " + res.guestName() + "\n" +
                         "Dates: " + res.startDate() + " to " + res.endDate() + "\n" +
-                        "Requested: " + res.roomType();
+                        "Requested Room: " + res.roomType() + "\n" +
+                        "Requested View: " + viewRequestedText;
 
                 if (isDowngrade) {
                     String status = isPendingDowngrade ? "(PENDING APPROVAL)" : "(APPROVED)";
                     tooltipText += "\n\n⚠️ ALERT: Downgrade to " + room.type() + "! " + status;
                 } else if (isUpgrade) {
                     tooltipText += "\n\n✨ INFO: Upgrade to " + room.type();
+                }
+
+                if (isViewMismatch) {
+                    tooltipText += "\n\n👁️ INFO: Assigned view (" + room.view() + ") differs from requested view.";
                 }
 
                 Tooltip tooltip = new Tooltip(tooltipText);

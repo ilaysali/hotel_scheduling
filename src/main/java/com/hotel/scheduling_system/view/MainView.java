@@ -248,12 +248,18 @@ public class MainView extends VBox {
         roomTypeBox.getItems().addAll("SINGLE", "DOUBLE", "SUITE");
         roomTypeBox.setPromptText("Select Room Type...");
 
+        // Added ComboBox for Preferred View
+        ComboBox<String> viewPreferenceBox = new ComboBox<>();
+        viewPreferenceBox.getItems().addAll("Any", "Sea", "Pool", "City", "Garden");
+        viewPreferenceBox.getSelectionModel().selectFirst(); // Defaults to "Any"
+
         GridPane grid = new GridPane();
         grid.setHgap(10); grid.setVgap(10);
         grid.add(new Label("Guest Name:"), 0, 0); grid.add(guestComboBox, 1, 0);
         grid.add(new Label("Start Date:"), 0, 1); grid.add(startDatePicker, 1, 1);
         grid.add(new Label("End Date:"), 0, 2); grid.add(endDatePicker, 1, 2);
         grid.add(new Label("Requested Room:"), 0, 3); grid.add(roomTypeBox, 1, 3);
+        grid.add(new Label("Preferred View:"), 0, 4); grid.add(viewPreferenceBox, 1, 4); // Added to layout
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -279,7 +285,20 @@ public class MainView extends VBox {
         dialog.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 int guestId = appController.getOrCreateGuest(guestComboBox.getValue());
-                appController.createNewReservation(guestId, roomTypeBox.getValue(), startDatePicker.getValue(), endDatePicker.getValue());
+
+                // Parse the view selection ("Any" becomes null for the database)
+                String selectedView = viewPreferenceBox.getValue();
+                String finalPreferredView = "Any".equals(selectedView) ? null : selectedView;
+
+                // Passing the 5th argument correctly
+                appController.createNewReservation(
+                        guestId,
+                        roomTypeBox.getValue(),
+                        startDatePicker.getValue(),
+                        endDatePicker.getValue(),
+                        finalPreferredView
+                );
+
                 new Alert(Alert.AlertType.INFORMATION, "New reservation added! Click 'Generate Schedule' to see how the AI handles it.").showAndWait();
             }
         });
