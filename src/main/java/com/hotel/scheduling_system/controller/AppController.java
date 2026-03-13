@@ -10,9 +10,11 @@ import com.hotel.scheduling_system.model.HousekeepingTask;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.model.Staff;
+import com.hotel.scheduling_system.service.ScenarioLoaderService;
 import com.hotel.scheduling_system.service.SchedulingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import java.io.File;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -27,18 +29,21 @@ public class AppController {
     private final ReservationDAO reservationDAO;
     private final StaffDAO staffDAO;
     private final HousekeepingDAO housekeepingDAO;
+    private final ScenarioLoaderService scenarioLoaderService;
 
     public Map<String, Object> onGenerateScheduleClicked() { return schedulingService.generateSchedule(); }
     public void onSaveScheduleClicked(Map<Room, List<Reservation>> assignments) { schedulingService.saveScheduleToDatabase(assignments); }
     public void onLoadMockDataClicked() { mockDataGenerator.resetAndGenerate(); }
     public List<Guest> getAllGuests() { return guestDAO.getAllGuests(); }
-
-    // Updated to include preferredView
     public void createNewReservation(int guestId, String roomType, LocalDate startDate, LocalDate endDate, String preferredView) {
         reservationDAO.addNewReservation(guestId, roomType, startDate, endDate, preferredView);
     }
-
     public int getOrCreateGuest(String fullName) { return guestDAO.getOrCreateGuest(fullName); }
+
+    // New method to handle JSON file loading
+    public void onLoadScenarioFromFile(File jsonFile) {
+        scenarioLoaderService.loadScenarioFromFile(jsonFile);
+    }
 
     public List<HousekeepingTask> generateAndGetHousekeepingReport(LocalDate date, List<Integer> roomIdsToClean) {
         List<Staff> cleaners = staffDAO.getHousekeepingStaff();
@@ -48,7 +53,6 @@ public class AppController {
             housekeepingDAO.assignTasksForDate(date, roomIdsToClean, staffIds);
         }
 
-        // After the tasks are created in the DB, fetch them for display
         return housekeepingDAO.getTasksForDate(date);
     }
 }

@@ -5,6 +5,7 @@ import com.hotel.scheduling_system.model.Guest;
 import com.hotel.scheduling_system.model.HousekeepingTask;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
+import com.hotel.scheduling_system.service.ScenarioLoaderService; // הוספנו את ה-Import
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
@@ -15,10 +16,13 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.stage.FileChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ResourceUtils;
 
+import java.io.File;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -32,16 +36,19 @@ public class MainView extends VBox {
     private static final Logger logger = LoggerFactory.getLogger(MainView.class);
 
     private final AppController appController;
+    private final ScenarioLoaderService scenarioLoaderService;
     private final GanttChart ganttChart;
     private final UnassignedPanel unassignedPanel;
     private final Button saveBtn;
+    private final Label fitnessLabel;
 
     private Map<Room, List<Reservation>> currentAssignments;
     private List<Reservation> currentUnassigned;
     private final Set<Reservation> approvedDowngrades = new HashSet<>();
 
-    public MainView(AppController appController) {
+    public MainView(AppController appController, ScenarioLoaderService scenarioLoaderService) {
         this.appController = appController;
+        this.scenarioLoaderService = scenarioLoaderService;
         this.ganttChart = new GanttChart();
         this.unassignedPanel = new UnassignedPanel();
 
@@ -57,13 +64,19 @@ public class MainView extends VBox {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Label fitnessLabel = new Label("AI Fitness Score: Waiting...");
+        fitnessLabel = new Label("AI Fitness Score: Waiting...");
         fitnessLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #673AB7; -fx-background-color: #EDE7F6; -fx-padding: 5 10 5 10; -fx-background-radius: 5;");
 
         headerBox.getChildren().addAll(titleLabel, spacer, fitnessLabel);
 
-        Button mockBtn = new Button("1. Reset & Load Mock Data");
-        mockBtn.setStyle("-fx-base: #FF9800; -fx-text-fill: white; -fx-font-weight: bold;");
+        MenuButton loadDataBtn = new MenuButton("1. Load Data Scenario");
+        loadDataBtn.setStyle("-fx-base: #FF9800; -fx-text-fill: white; -fx-font-weight: bold;");
+
+        MenuItem heavyMockItem = new MenuItem("Load Heavy Scenario (Auto-Generated)");
+        MenuItem lightMockItem = new MenuItem("Load Light Scenario (JSON)");
+        MenuItem customJsonItem = new MenuItem("Upload Custom JSON...");
+
+        loadDataBtn.getItems().addAll(heavyMockItem, lightMockItem, new SeparatorMenuItem(), customJsonItem);
 
         Button generateBtn = new Button("2. Generate Schedule");
 
@@ -77,8 +90,53 @@ public class MainView extends VBox {
         Button housekeepingBtn = new Button("Housekeeping");
         housekeepingBtn.setStyle("-fx-base: #9C27B0; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        HBox buttonsBox = new HBox(15, mockBtn, generateBtn, saveBtn, addResBtn, housekeepingBtn);
+        HBox buttonsBox = new HBox(15, loadDataBtn, generateBtn, saveBtn, addResBtn, housekeepingBtn);
         HBox dashboard = new HBox(20, ganttChart, unassignedPanel);
+
+        heavyMockItem.setOnAction(e -> {
+            try {
+                appController.onLoadMockDataClicked();
+                resetDashboardState("Heavy mock data loaded successfully!");
+            } catch (Exception ex) {
+                logger.error("Failed to load heavy mock data", ex);
+                new Alert(Alert.AlertType.ERROR, "Failed to load mock data.").showAndWait();
+            }
+        });
+
+        lightMockItem.setOnAction(e -> {
+            try {
+                // Read from classpath using InputStream
+                java.io.InputStream is = getClass().getResourceAsStream("/light_scenario.json");
+                if (is == null) {
+                    throw new java.io.FileNotFoundException("Could not find light_scenario.json in resources");
+                }
+                scenarioLoaderService.loadScenarioFromStream(is);
+                resetDashboardState("Light JSON scenario loaded successfully!");
+            } catch (Exception ex) {
+                logger.error("Failed to load light scenario", ex);
+                // Print the exact message to the alert for easier debugging
+                new Alert(Alert.AlertType.ERROR, "Failed to load light scenario: " + ex.getMessage()).showAndWait();
+            }
+        });
+
+        customJsonItem.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Select Custom JSON Scenario");
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
+
+            File selectedFile = fileChooser.showOpenDialog(this.getScene().getWindow());
+
+            if (selectedFile != null) {
+                try {
+                    // כאן אנחנו משתמשים ב-Service החדש עבור הקובץ שהמשתמש בחר
+                    scenarioLoaderService.loadScenarioFromFile(selectedFile);
+                    resetDashboardState("Custom JSON scenario loaded successfully from:\n" + selectedFile.getName());
+                } catch (Exception ex) {
+                    logger.error("Failed to load custom scenario", ex);
+                    new Alert(Alert.AlertType.ERROR, "Failed to load the selected file. Ensure the JSON format is correct.").showAndWait();
+                }
+            }
+        });
 
         housekeepingBtn.setOnAction(e -> openHousekeepingDialog());
         addResBtn.setOnAction(e -> openNewReservationDialog());
@@ -99,23 +157,10 @@ public class MainView extends VBox {
             refreshDashboard();
         });
 
-        mockBtn.setOnAction(event -> {
-            appController.onLoadMockDataClicked();
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Database Reset");
-            alert.setHeaderText(null);
-            alert.setContentText("Mock data loaded! Run the AI to see the schedule.");
-            alert.showAndWait();
-            fitnessLabel.setText("AI Fitness Score: Waiting...");
-            approvedDowngrades.clear();
-            saveBtn.setDisable(true);
-        });
-
         generateBtn.setOnAction(event -> {
             try {
                 Map<String, Object> results = appController.onGenerateScheduleClicked();
 
-                // Suppressing the unavoidable type erasure warnings for Maps and Lists
                 @SuppressWarnings("unchecked")
                 Map<Room, List<Reservation>> assignments = (Map<Room, List<Reservation>>) results.get("ASSIGNMENTS");
                 currentAssignments = assignments;
@@ -134,9 +179,8 @@ public class MainView extends VBox {
                 Alert errorAlert = new Alert(Alert.AlertType.ERROR, e.getMessage());
                 errorAlert.showAndWait();
             } catch (Exception e) {
-                // Replacing printStackTrace with robust logging and UI feedback
                 logger.error("Error occurred while generating the AI schedule", e);
-                Alert errorAlert = new Alert(Alert.AlertType.ERROR, "An unexpected error occurred while generating the schedule. Check logs for details.");
+                Alert errorAlert = new Alert(Alert.AlertType.ERROR, "An unexpected error occurred while generating the schedule.");
                 errorAlert.showAndWait();
             }
         });
@@ -151,6 +195,33 @@ public class MainView extends VBox {
         getChildren().addAll(headerBox, buttonsBox, dashboard);
     }
 
+    private void resetDashboardState(String successMessage) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Database Update");
+        alert.setHeaderText(null);
+        alert.setContentText(successMessage + "\nRun the AI to see the schedule.");
+        alert.showAndWait();
+
+        fitnessLabel.setText("AI Fitness Score: Waiting...");
+        approvedDowngrades.clear();
+        saveBtn.setDisable(true);
+
+        // Initialize to empty collections if they are null to prevent NullPointerException
+        if (currentAssignments == null) {
+            currentAssignments = new java.util.HashMap<>();
+        }
+        if (currentUnassigned == null) {
+            currentUnassigned = new java.util.ArrayList<>();
+        }
+
+        // Clear existing data
+        currentAssignments.clear();
+        currentUnassigned.clear();
+
+        // Update the UI components with empty data
+        ganttChart.updateData(currentAssignments, approvedDowngrades);
+        unassignedPanel.updateData(currentUnassigned);
+    }
     private void refreshDashboard() {
         if (currentAssignments == null) return;
         boolean hasPendingDowngrades = ganttChart.updateData(currentAssignments, approvedDowngrades);
@@ -167,13 +238,12 @@ public class MainView extends VBox {
         HBox topControls = new HBox(10);
         topControls.setAlignment(Pos.CENTER_LEFT);
 
-        DatePicker datePicker = new DatePicker(LocalDate.of(2026, 4, 10)); // Default date from our high-occupancy scenario
+        DatePicker datePicker = new DatePicker(LocalDate.of(2026, 4, 10));
         Button loadBtn = new Button("Generate Tasks");
         loadBtn.setStyle("-fx-base: #FFC107; -fx-font-weight: bold;");
 
         topControls.getChildren().addAll(new Label("Select Date:"), datePicker, loadBtn);
 
-        // Professional task table (TableView)
         TableView<HousekeepingTask> table = new TableView<>();
 
         TableColumn<HousekeepingTask, Integer> roomCol = new TableColumn<>("Room");
@@ -185,7 +255,6 @@ public class MainView extends VBox {
         TableColumn<HousekeepingTask, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().status()));
 
-        // Fixing varargs generic array creation warning by adding columns individually
         table.getColumns().add(roomCol);
         table.getColumns().add(staffCol);
         table.getColumns().add(statusCol);
@@ -197,26 +266,19 @@ public class MainView extends VBox {
             LocalDate date = datePicker.getValue();
             if (date != null) {
                 List<Integer> activeRooms = new ArrayList<>();
-
-                // The "magic": scanning the results the AI determined for the hotel!
                 if (currentAssignments != null) {
                     for (Map.Entry<Room, List<Reservation>> entry : currentAssignments.entrySet()) {
-                        // If this room has a reservation that falls on the selected date - it needs cleaning!
                         boolean needsCleaning = entry.getValue().stream().anyMatch(res ->
                                 !date.isBefore(res.startDate()) && !date.isAfter(res.endDate())
                         );
                         if (needsCleaning) {
-                            activeRooms.add(entry.getKey().id()); // Updated to use the record accessor id()
+                            activeRooms.add(entry.getKey().id());
                         }
                     }
                 }
-
-                // Failsafe: if we haven't generated a smart schedule yet, assign tasks to all rooms by default
                 if (activeRooms.isEmpty()) {
                     activeRooms.addAll(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
                 }
-
-                // Sending to Controller to generate and save tasks in the database
                 List<HousekeepingTask> tasks = appController.generateAndGetHousekeepingReport(date, activeRooms);
                 table.getItems().setAll(tasks);
             }
@@ -248,10 +310,9 @@ public class MainView extends VBox {
         roomTypeBox.getItems().addAll("SINGLE", "DOUBLE", "SUITE");
         roomTypeBox.setPromptText("Select Room Type...");
 
-        // Added ComboBox for Preferred View
         ComboBox<String> viewPreferenceBox = new ComboBox<>();
         viewPreferenceBox.getItems().addAll("Any", "Sea", "Pool", "City", "Garden");
-        viewPreferenceBox.getSelectionModel().selectFirst(); // Defaults to "Any"
+        viewPreferenceBox.getSelectionModel().selectFirst();
 
         GridPane grid = new GridPane();
         grid.setHgap(10); grid.setVgap(10);
@@ -259,7 +320,7 @@ public class MainView extends VBox {
         grid.add(new Label("Start Date:"), 0, 1); grid.add(startDatePicker, 1, 1);
         grid.add(new Label("End Date:"), 0, 2); grid.add(endDatePicker, 1, 2);
         grid.add(new Label("Requested Room:"), 0, 3); grid.add(roomTypeBox, 1, 3);
-        grid.add(new Label("Preferred View:"), 0, 4); grid.add(viewPreferenceBox, 1, 4); // Added to layout
+        grid.add(new Label("Preferred View:"), 0, 4); grid.add(viewPreferenceBox, 1, 4);
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -278,19 +339,15 @@ public class MainView extends VBox {
             if (start == null || end == null || !end.isAfter(start)) {
                 new Alert(Alert.AlertType.ERROR, "The End Date must be strictly after the Start Date.").showAndWait();
                 event.consume();
-                // Removed the unnecessary return statement here
             }
         });
 
         dialog.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 int guestId = appController.getOrCreateGuest(guestComboBox.getValue());
-
-                // Parse the view selection ("Any" becomes null for the database)
                 String selectedView = viewPreferenceBox.getValue();
                 String finalPreferredView = "Any".equals(selectedView) ? null : selectedView;
 
-                // Passing the 5th argument correctly
                 appController.createNewReservation(
                         guestId,
                         roomTypeBox.getValue(),

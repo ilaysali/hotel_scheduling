@@ -38,13 +38,13 @@ public class SchedulingService {
         return processor.process(bestSolution, reservations, rooms);
     }
 
-    // הפונקציה החדשה שעוברת על התוצאות ושומרת אותן
+    // The new function that iterates over the results and saves them
     public void saveScheduleToDatabase(Map<Room, List<Reservation>> assignments) {
         for (Map.Entry<Room, List<Reservation>> entry : assignments.entrySet()) {
             Room assignedRoom = entry.getKey();
 
             for (Reservation res : entry.getValue()) {
-                // שומרים את השידוך בין מזהה ההזמנה למזהה החדר הפיזי
+                // Save the match between the reservation ID and the physical room ID
                 reservationDAO.updateReservationRoom(res.id(), assignedRoom.id());
             }
         }
