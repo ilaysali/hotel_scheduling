@@ -82,12 +82,13 @@ public class ScenarioLoaderService extends BaseDAO {
         }
 
         // 2. Insert Guests
-        String insertGuestSql = "INSERT INTO Guests (guest_id, first_name, last_name) VALUES (?, ?, ?)";
+        String insertGuestSql = "INSERT INTO Guests (guest_id, first_name, last_name, email) VALUES (?, ?, ?, ?)";
         try (PreparedStatement pstmt = conn.prepareStatement(insertGuestSql)) {
             for (GuestDTO guest : scenario.guests()) {
                 pstmt.setInt(1, guest.id());
                 pstmt.setString(2, guest.firstName());
                 pstmt.setString(3, guest.lastName());
+                pstmt.setString(4, guest.email());
                 pstmt.addBatch();
             }
             pstmt.executeBatch();

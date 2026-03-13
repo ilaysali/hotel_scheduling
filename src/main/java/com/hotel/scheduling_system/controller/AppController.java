@@ -2,7 +2,6 @@ package com.hotel.scheduling_system.controller;
 
 import com.hotel.scheduling_system.database.GuestDAO;
 import com.hotel.scheduling_system.database.HousekeepingDAO;
-import com.hotel.scheduling_system.database.MockDataGenerator;
 import com.hotel.scheduling_system.database.ReservationDAO;
 import com.hotel.scheduling_system.database.StaffDAO;
 import com.hotel.scheduling_system.model.Guest;
@@ -24,7 +23,6 @@ import java.util.Map;
 public class AppController {
 
     private final SchedulingService schedulingService;
-    private final MockDataGenerator mockDataGenerator;
     private final GuestDAO guestDAO;
     private final ReservationDAO reservationDAO;
     private final StaffDAO staffDAO;
@@ -33,7 +31,6 @@ public class AppController {
 
     public Map<String, Object> onGenerateScheduleClicked() { return schedulingService.generateSchedule(); }
     public void onSaveScheduleClicked(Map<Room, List<Reservation>> assignments) { schedulingService.saveScheduleToDatabase(assignments); }
-    public void onLoadMockDataClicked() { mockDataGenerator.resetAndGenerate(); }
     public List<Guest> getAllGuests() { return guestDAO.getAllGuests(); }
     public void createNewReservation(int guestId, String roomType, LocalDate startDate, LocalDate endDate, String preferredView) {
         reservationDAO.addNewReservation(guestId, roomType, startDate, endDate, preferredView);

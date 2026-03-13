@@ -95,11 +95,16 @@ public class MainView extends VBox {
 
         heavyMockItem.setOnAction(e -> {
             try {
-                appController.onLoadMockDataClicked();
-                resetDashboardState("Heavy mock data loaded successfully!");
+                // Read heavy scenario from classpath using InputStream
+                java.io.InputStream is = getClass().getResourceAsStream("/heavy_scenario.json");
+                if (is == null) {
+                    throw new java.io.FileNotFoundException("Could not find heavy_scenario.json in resources");
+                }
+                scenarioLoaderService.loadScenarioFromStream(is);
+                resetDashboardState("Heavy JSON scenario loaded successfully!");
             } catch (Exception ex) {
-                logger.error("Failed to load heavy mock data", ex);
-                new Alert(Alert.AlertType.ERROR, "Failed to load mock data.").showAndWait();
+                logger.error("Failed to load heavy scenario", ex);
+                new Alert(Alert.AlertType.ERROR, "Failed to load heavy scenario: " + ex.getMessage()).showAndWait();
             }
         });
 
