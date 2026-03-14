@@ -7,43 +7,52 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.stereotype.Component;
 
+
+@Component
 public class PostProcessor {
 
-    public Map<String, Object> process(ScheduleSolution winningSolution, List<Reservation> allReservations, List<Room> rooms) {
-        Map<String, Object> result = new HashMap<>();
+    // Define a clear, strongly-typed return object using a Java Record
+    public record ProcessingResult(
+            Map<Room, List<Reservation>> assignments,
+            List<Reservation> unassigned,
+            double fitnessScore
+    ) {}
+
+    public ProcessingResult process(ScheduleSolution winningSolution, List<Reservation> allReservations, List<Room> rooms) {
+
+        // Safety check to prevent indexing errors
+        int[] genes = winningSolution.getGenes();
+        if (genes.length != allReservations.size()) {
+            throw new IllegalArgumentException("Mismatch between number of genes and reservations");
+        }
+
         List<Reservation> unassignedList = new ArrayList<>();
         Map<Room, List<Reservation>> roomAssignments = new HashMap<>();
-
-        // Create HashMap for rooms to maintain O(1) retrieval performance
         Map<Integer, Room> roomMap = new HashMap<>();
+
+        // Initialize maps to maintain O(1) performance
         for (Room room : rooms) {
             roomAssignments.put(room, new ArrayList<>());
             roomMap.put(room.id(), room);
         }
 
-        int[] genes = winningSolution.getGenes();
-
-        // Loop using the simple index i that maps the reservations list to the genes array
         for (int i = 0; i < allReservations.size(); i++) {
-
-            // O(1) retrieval (assuming it's an ArrayList)
             Reservation currentRes = allReservations.get(i);
-
-            // The gene at index i contains the ID of the room assigned to the reservation at index i
             int assignedRoomId = genes[i];
-
-            // Retrieve the assigned room from the dictionary in O(1)
             Room assignedRoom = roomMap.get(assignedRoomId);
 
+            // Handle invalid room assignments gracefully
             if (assignedRoom == null) {
                 unassignedList.add(currentRes);
                 continue;
             }
 
-            boolean hasConflict = false;
             List<Reservation> existingRoomSchedule = roomAssignments.get(assignedRoom);
+            boolean hasConflict = false;
 
+            // Check for overlaps within the specific room
             for (Reservation other : existingRoomSchedule) {
                 if (currentRes.overlaps(other)) {
                     hasConflict = true;
@@ -58,10 +67,7 @@ public class PostProcessor {
             }
         }
 
-        result.put("ASSIGNMENTS", roomAssignments);
-        result.put("UNASSIGNED", unassignedList);
-        result.put("FITNESS_SCORE", winningSolution.getFitness());
-
-        return result;
+        // Return the strongly-typed record instead of a generic Map
+        return new ProcessingResult(roomAssignments, unassignedList, winningSolution.getFitness());
     }
 }

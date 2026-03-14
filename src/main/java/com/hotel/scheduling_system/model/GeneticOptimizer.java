@@ -1,10 +1,12 @@
 package com.hotel.scheduling_system.model;
 
+import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
+@Component
 public class GeneticOptimizer {
     private List<ScheduleSolution> population = new ArrayList<>();
     private final Random random = new Random();
@@ -30,9 +32,7 @@ public class GeneticOptimizer {
         overallBestSolution.calculateFitness(reservations, rooms);
 
         while (true) {
-            // OPTIMIZATION: Removed the heavy stream().max() call from the loop.
-            // We now rely on the fact that evolve() sorts the population, making population.get(0) the best.
-
+            // We rely on the fact that evolve() sorts the population, making population.get(0) the best.
             ScheduleSolution currentBest = population.get(0); // Safely get the best after initialization/evolution
 
             if (currentBest.getFitness() > overallBestSolution.getFitness()) {

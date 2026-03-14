@@ -79,11 +79,11 @@ public class ScenarioLoaderService extends BaseDAO {
         try (PreparedStatement resStmt = conn.prepareStatement(insertResSql);
              PreparedStatement resRoomsStmt = conn.prepareStatement(insertResRoomsSql)) {
 
-            // Pre-calculate default room IDs per room type to avoid O(N*M) complexity in the loop
+            // Calculate room IDs per room type to avoid O(N*M) complexity in the loop
             java.util.Map<String, Integer> defaultRoomIdsByType = new java.util.HashMap<>();
             int absoluteFallbackRoomId = -1;
 
-            // Build the quick-lookup map
+            // Build the map
             if (!scenario.rooms().isEmpty()) {
                 absoluteFallbackRoomId = scenario.rooms().get(0).id();
                 for (RoomDTO room : scenario.rooms()) {
@@ -162,7 +162,7 @@ public class ScenarioLoaderService extends BaseDAO {
     }
 
     /**
-     * Loads a scenario directly from an InputStream (safe for classpath resources).
+     * Loads a scenario directly from an InputStream.
      * @param inputStream The input stream containing the JSON data.
      */
     public void loadScenarioFromStream(InputStream inputStream) {

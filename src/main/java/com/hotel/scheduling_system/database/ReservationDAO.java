@@ -22,7 +22,6 @@ public class ReservationDAO extends BaseDAO { // Inherits database connection lo
     public List<Reservation> getAllReservations() {
         List<Reservation> reservations = new ArrayList<>();
 
-        // Updated SQL query to include the preferred_view column
         String query = """
                 SELECT
                     r.reservation_id AS id,
@@ -42,7 +41,6 @@ public class ReservationDAO extends BaseDAO { // Inherits database connection lo
              ResultSet rs = stmt.executeQuery(query)) {
 
             while (rs.next()) {
-                // Using the updated Reservation constructor that accepts the preferred view
                 reservations.add(new Reservation(
                         rs.getInt("id"),
                         rs.getString("guest_name"),

@@ -1,6 +1,7 @@
 package com.hotel.scheduling_system.view;
 
 import com.hotel.scheduling_system.controller.AppController;
+import com.hotel.scheduling_system.controller.PostProcessor.ProcessingResult;
 import com.hotel.scheduling_system.model.Guest;
 import com.hotel.scheduling_system.model.HousekeepingTask;
 import com.hotel.scheduling_system.model.Reservation;
@@ -158,21 +159,16 @@ public class MainView extends VBox {
 
         generateBtn.setOnAction(event -> {
             try {
-                Map<String, Object> results = appController.onGenerateScheduleClicked();
+                ProcessingResult results = appController.onGenerateScheduleClicked();
 
-                @SuppressWarnings("unchecked")
-                Map<Room, List<Reservation>> assignments = (Map<Room, List<Reservation>>) results.get("ASSIGNMENTS");
-                currentAssignments = assignments;
-
-                @SuppressWarnings("unchecked")
-                List<Reservation> unassigned = (List<Reservation>) results.get("UNASSIGNED");
-                currentUnassigned = unassigned;
-
-                Double fitnessScore = (Double) results.get("FITNESS_SCORE");
+                // Directly assign using the record's accessor methods
+                currentAssignments = results.assignments();
+                currentUnassigned = results.unassigned();
+                Double fitnessScore = results.fitnessScore();
 
                 approvedDowngrades.clear();
                 refreshDashboard();
-                if (fitnessScore != null) fitnessLabel.setText(String.format("AI Fitness Score: %,.0f", fitnessScore));
+                fitnessLabel.setText(String.format("AI Fitness Score: %,.0f", fitnessScore));
 
             } catch (IllegalArgumentException e) {
                 Alert errorAlert = new Alert(Alert.AlertType.ERROR, e.getMessage());
@@ -183,7 +179,6 @@ public class MainView extends VBox {
                 errorAlert.showAndWait();
             }
         });
-
         saveBtn.setOnAction(event -> {
             if (currentAssignments != null) {
                 appController.onSaveScheduleClicked(currentAssignments);

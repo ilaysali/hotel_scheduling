@@ -121,11 +121,7 @@ public class GanttChart extends VBox {
                 double xPos = roomLabelWidth + (startDayOffset * dayWidth);
                 double width = duration * dayWidth;
 
-                Color barColor = switch (res.roomType().name()) {
-                    case "SUITE" -> Color.GOLD;
-                    case "DOUBLE" -> Color.LIGHTBLUE;
-                    default -> Color.LIGHTGREEN;
-                };
+                Color barColor = Color.web(res.roomType().getColorName());
 
                 Rectangle bar = new Rectangle(xPos, yOffset, width, barHeight);
                 bar.setFill(barColor);
@@ -156,6 +152,9 @@ public class GanttChart extends VBox {
                     bar.setStroke(Color.BLACK);
                     bar.setStrokeWidth(1);
                 }
+                if (isViewMismatch) {
+                    bar.setEffect(new javafx.scene.effect.InnerShadow(10, Color.DARKRED));
+                }
 
                 Label resLabel = new Label("Res " + res.id());
                 resLabel.setLayoutX(xPos + 5);
@@ -176,7 +175,7 @@ public class GanttChart extends VBox {
                 }
 
                 if (isViewMismatch) {
-                    tooltipText += "\n\n👁️ INFO: Assigned view (" + room.view() + ") differs from requested view.";
+                    tooltipText += "\n\n   INFO: Assigned view (" + room.view() + ") differs from requested view.";
                 }
 
                 Tooltip tooltip = new Tooltip(tooltipText);

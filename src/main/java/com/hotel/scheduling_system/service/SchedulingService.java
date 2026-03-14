@@ -1,5 +1,6 @@
 package com.hotel.scheduling_system.service;
 
+import com.hotel.scheduling_system.controller.PostProcessor.ProcessingResult;
 import com.hotel.scheduling_system.controller.PostProcessor;
 import com.hotel.scheduling_system.database.ReservationDAO;
 import com.hotel.scheduling_system.database.RoomDAO;
@@ -17,10 +18,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SchedulingService {
 
+    private final PostProcessor postProcessor;
+    private final GeneticOptimizer geneticOptimizer;
     private final ReservationDAO reservationDAO;
     private final RoomDAO roomDAO;
 
-    public Map<String, Object> generateSchedule() {
+    public ProcessingResult generateSchedule() {
         List<Reservation> reservations = reservationDAO.getAllReservations();
         List<Room> rooms = roomDAO.getAllRooms();
 
@@ -28,11 +31,9 @@ public class SchedulingService {
             throw new RuntimeException("Cannot generate schedule: No reservations or rooms found in DB.");
         }
 
-        GeneticOptimizer optimizer = new GeneticOptimizer();
-        ScheduleSolution bestSolution = optimizer.solve(reservations, rooms);
 
-        PostProcessor processor = new PostProcessor();
-        return processor.process(bestSolution, reservations, rooms);
+        ScheduleSolution bestSolution = geneticOptimizer.solve(reservations, rooms);
+        return postProcessor.process(bestSolution, reservations, rooms);
     }
 
     public void saveScheduleToDatabase(Map<Room, List<Reservation>> assignments) {
