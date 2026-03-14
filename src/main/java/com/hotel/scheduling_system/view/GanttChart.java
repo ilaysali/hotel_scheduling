@@ -2,6 +2,7 @@ package com.hotel.scheduling_system.view;
 
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
+import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
@@ -14,10 +15,10 @@ import javafx.scene.shape.Line;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
 import lombok.Setter;
-
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,7 +48,6 @@ public class GanttChart extends VBox {
         getChildren().addAll(title, scrollPane);
     }
 
-    // The function now also receives the list of approved downgrades, and returns whether there are still pending ones
     public boolean updateData(Map<Room, List<Reservation>> assignments, Set<Reservation> approvedDowngrades) {
         drawingPane.getChildren().clear();
         if (assignments == null || assignments.isEmpty()) return false;
@@ -65,6 +65,9 @@ public class GanttChart extends VBox {
 
         if (earliestDate == null) return false;
 
+        // Collect all UI nodes in a list to prevent multiple layout recalculations
+        List<Node> nodesToAdd = new ArrayList<>();
+
         int dayWidth = 50;
         int barHeight = 30;
         int roomLabelWidth = 100;
@@ -73,7 +76,7 @@ public class GanttChart extends VBox {
         int rulerY = 30;
         Line rulerLine = new Line(roomLabelWidth, rulerY, roomLabelWidth + (totalDays * dayWidth), rulerY);
         rulerLine.setStroke(Color.DARKGRAY);
-        drawingPane.getChildren().add(rulerLine);
+        nodesToAdd.add(rulerLine);
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd");
 
@@ -90,7 +93,10 @@ public class GanttChart extends VBox {
             Line gridLine = new Line(xPos, rulerY, xPos, 800);
             gridLine.setStroke(Color.LIGHTGRAY);
             gridLine.getStrokeDashArray().addAll(5d, 5d);
-            drawingPane.getChildren().addAll(gridLine, tick, dateLabel);
+
+            nodesToAdd.add(gridLine);
+            nodesToAdd.add(tick);
+            nodesToAdd.add(dateLabel);
         }
 
         int yOffset = 70;
@@ -99,16 +105,15 @@ public class GanttChart extends VBox {
             Room room = entry.getKey();
             List<Reservation> reservations = entry.getValue();
 
-            // Updated room label to include the view
             Label roomLabel = new Label("Room " + room.roomNumber() + "\n(" + room.type() + ")\n[" + room.view() + "]");
             roomLabel.setLayoutX(10);
-            roomLabel.setLayoutY(yOffset - 10); // Shifted slightly up to accommodate the extra line
+            roomLabel.setLayoutY(yOffset - 10);
             roomLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
-            drawingPane.getChildren().add(roomLabel);
+            nodesToAdd.add(roomLabel);
 
             Line guideLine = new Line(roomLabelWidth, yOffset + barHeight + 10, roomLabelWidth + (totalDays * dayWidth), yOffset + barHeight + 10);
             guideLine.setStroke(Color.LIGHTGRAY);
-            drawingPane.getChildren().add(guideLine);
+            nodesToAdd.add(guideLine);
 
             for (Reservation res : reservations) {
                 long startDayOffset = ChronoUnit.DAYS.between(earliestDate, res.startDate());
@@ -127,30 +132,26 @@ public class GanttChart extends VBox {
                 bar.setArcWidth(10);
                 bar.setArcHeight(10);
 
-                // Utilizing the RoomType enum getRank() directly to replace the old switch statement!
                 int requestedRank = res.roomType().getRank();
                 int assignedRank = room.type().getRank();
 
                 boolean isDowngrade = assignedRank < requestedRank;
-                boolean isPendingDowngrade = isDowngrade && !approvedDowngrades.contains(res);
+                final boolean isPendingDowngrade = isDowngrade && !approvedDowngrades.contains(res);
                 boolean isUpgrade = assignedRank > requestedRank;
-
-                // Check for view mismatch
                 boolean isViewMismatch = res.preferredView() != null && !res.preferredView().equals(room.view());
 
-                // Smart coloring based on status
                 if (isPendingDowngrade) {
                     hasPendingDowngrades = true;
                     bar.setStroke(Color.RED);
                     bar.setStrokeWidth(2.5);
-                    bar.getStrokeDashArray().addAll(4d, 4d); // Dashed red (requires attention!)
+                    bar.getStrokeDashArray().addAll(4d, 4d);
                 } else if (isDowngrade) {
                     bar.setStroke(Color.ORANGE);
-                    bar.setStrokeWidth(2); // Solid orange (means the manager approved the downgrade)
+                    bar.setStrokeWidth(2);
                 } else if (isUpgrade) {
                     bar.setStroke(Color.BLUE);
                     bar.setStrokeWidth(1.5);
-                    bar.getStrokeDashArray().addAll(2d, 2d); // Dashed blue for upgrade (for info only, doesn't require approval)
+                    bar.getStrokeDashArray().addAll(2d, 2d);
                 } else {
                     bar.setStroke(Color.BLACK);
                     bar.setStrokeWidth(1);
@@ -161,9 +162,7 @@ public class GanttChart extends VBox {
                 resLabel.setLayoutY(yOffset + 5);
                 resLabel.setStyle("-fx-font-size: 11px;");
 
-                // Updated tooltip to include view information
                 String viewRequestedText = (res.preferredView() != null) ? res.preferredView() : "Any";
-
                 String tooltipText = "Guest Name: " + res.guestName() + "\n" +
                         "Dates: " + res.startDate() + " to " + res.endDate() + "\n" +
                         "Requested Room: " + res.roomType() + "\n" +
@@ -187,33 +186,40 @@ public class GanttChart extends VBox {
                 Tooltip.install(bar, tooltip);
                 Tooltip.install(resLabel, tooltip);
 
-                ContextMenu contextMenu = new ContextMenu();
+                // Create and show the menu ONLY when the user right-clicks.
+                javafx.event.EventHandler<javafx.scene.input.ContextMenuEvent> contextMenuHandler = e -> {
+                    ContextMenu contextMenu = new ContextMenu();
 
-                // Adding the approved option (only if it's a downgrade that hasn't been approved yet)
-                if (isPendingDowngrade) {
-                    MenuItem approveItem = new MenuItem("Approve Downgrade");
-                    approveItem.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
-                    approveItem.setOnAction(e -> {
-                        if (onApproveCallback != null) onApproveCallback.accept(res);
+                    if (isPendingDowngrade) {
+                        MenuItem approveItem = new MenuItem("Approve Downgrade");
+                        approveItem.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+                        approveItem.setOnAction(ev -> {
+                            if (onApproveCallback != null) onApproveCallback.accept(res);
+                        });
+                        contextMenu.getItems().add(approveItem);
+                    }
+
+                    MenuItem rejectItem = new MenuItem("Reject Assignment (Move to Unassigned)");
+                    rejectItem.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                    rejectItem.setOnAction(ev -> {
+                        if (onRejectCallback != null) onRejectCallback.accept(res);
                     });
-                    contextMenu.getItems().add(approveItem);
-                }
+                    contextMenu.getItems().add(rejectItem);
 
-                MenuItem rejectItem = new MenuItem("Reject Assignment (Move to Unassigned)");
-                rejectItem.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
-                rejectItem.setOnAction(e -> {
-                    if (onRejectCallback != null) onRejectCallback.accept(res);
-                });
+                    contextMenu.show(bar, e.getScreenX(), e.getScreenY());
+                };
 
-                contextMenu.getItems().add(rejectItem);
+                bar.setOnContextMenuRequested(contextMenuHandler);
+                resLabel.setOnContextMenuRequested(contextMenuHandler);
 
-                bar.setOnContextMenuRequested(e -> contextMenu.show(bar, e.getScreenX(), e.getScreenY()));
-                resLabel.setOnContextMenuRequested(e -> contextMenu.show(resLabel, e.getScreenX(), e.getScreenY()));
-
-                drawingPane.getChildren().addAll(bar, resLabel);
+                nodesToAdd.add(bar);
+                nodesToAdd.add(resLabel);
             }
             yOffset += 60;
         }
+
+        // Render all UI elements to the screen in a single, fast operation
+        drawingPane.getChildren().addAll(nodesToAdd);
 
         return hasPendingDowngrades;
     }

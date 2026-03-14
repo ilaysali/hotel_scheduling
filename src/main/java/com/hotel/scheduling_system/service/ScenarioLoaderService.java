@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.io.File;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
@@ -29,16 +30,16 @@ public class ScenarioLoaderService extends BaseDAO {
 
     private void clearDatabase(Connection conn) throws Exception {
         logger.info("Clearing old database tables...");
-        try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("SET FOREIGN_KEY_CHECKS = 0");
-            stmt.executeUpdate("TRUNCATE TABLE Reservation_Rooms");
-            stmt.executeUpdate("TRUNCATE TABLE Payments");
-            stmt.executeUpdate("TRUNCATE TABLE Reservations");
-            stmt.executeUpdate("TRUNCATE TABLE Housekeeping_Schedule");
-            stmt.executeUpdate("TRUNCATE TABLE Guests");
-            stmt.executeUpdate("TRUNCATE TABLE Staff");
-            stmt.executeUpdate("TRUNCATE TABLE Rooms");
-            stmt.executeUpdate("SET FOREIGN_KEY_CHECKS = 1");
+        try (Statement statement = conn.createStatement()) {
+            statement.executeUpdate("SET FOREIGN_KEY_CHECKS = 0");
+            statement.executeUpdate("TRUNCATE TABLE Reservation_Rooms");
+            statement.executeUpdate("TRUNCATE TABLE Payments");
+            statement.executeUpdate("TRUNCATE TABLE Reservations");
+            statement.executeUpdate("TRUNCATE TABLE Housekeeping_Schedule");
+            statement.executeUpdate("TRUNCATE TABLE Guests");
+            statement.executeUpdate("TRUNCATE TABLE Staff");
+            statement.executeUpdate("TRUNCATE TABLE Rooms");
+            statement.executeUpdate("SET FOREIGN_KEY_CHECKS = 1");
         }
     }
 
@@ -47,28 +48,28 @@ public class ScenarioLoaderService extends BaseDAO {
 
         // 1. Insert Rooms
         String insertRoomSql = "INSERT INTO Rooms (room_id, room_number, room_type, room_view) VALUES (?, ?, ?, ?)";
-        try (PreparedStatement pstmt = conn.prepareStatement(insertRoomSql)) {
+        try (PreparedStatement statement = conn.prepareStatement(insertRoomSql)) {
             for (RoomDTO room : scenario.rooms()) {
-                pstmt.setInt(1, room.id());
-                pstmt.setInt(2, room.number());
-                pstmt.setString(3, room.type());
-                pstmt.setString(4, room.view());
-                pstmt.addBatch();
+                statement.setInt(1, room.id());
+                statement.setInt(2, room.number());
+                statement.setString(3, room.type());
+                statement.setString(4, room.view());
+                statement.addBatch();
             }
-            pstmt.executeBatch();
+            statement.executeBatch();
         }
 
         // 2. Insert Guests
         String insertGuestSql = "INSERT INTO Guests (guest_id, first_name, last_name, email) VALUES (?, ?, ?, ?)";
-        try (PreparedStatement pstmt = conn.prepareStatement(insertGuestSql)) {
+        try (PreparedStatement statement = conn.prepareStatement(insertGuestSql)) {
             for (GuestDTO guest : scenario.guests()) {
-                pstmt.setInt(1, guest.id());
-                pstmt.setString(2, guest.firstName());
-                pstmt.setString(3, guest.lastName());
-                pstmt.setString(4, guest.email());
-                pstmt.addBatch();
+                statement.setInt(1, guest.id());
+                statement.setString(2, guest.firstName());
+                statement.setString(3, guest.lastName());
+                statement.setString(4, guest.email());
+                statement.addBatch();
             }
-            pstmt.executeBatch();
+            statement.executeBatch();
         }
 
         // 3. Insert Reservations and Reservation_Rooms
@@ -116,6 +117,36 @@ public class ScenarioLoaderService extends BaseDAO {
     }
 
     /**
+     * Shared logic to process the parsed scenario data and save it to the database
+     * using a single transaction.
+     * @param scenario The parsed ScenarioDTO object
+     * @throws Exception If any database operation fails
+     */
+    private void processAndSaveScenario(ScenarioDTO scenario) throws Exception {
+        try (Connection conn = getConnection()) {
+            // Disable auto-commit to start a single large transaction
+            conn.setAutoCommit(false);
+            try {
+                clearDatabase(conn);
+                insertScenarioData(conn, scenario);
+
+                // Commit all changes at once if everything was successful
+                conn.commit();
+
+                logger.info("Successfully loaded scenario: {} rooms, {} guests, {} reservations",
+                        scenario.rooms().size(), scenario.guests().size(), scenario.reservations().size());
+            } catch (Exception e) {
+                // Rollback all changes if any error occurs to maintain data integrity
+                conn.rollback();
+                throw e;
+            } finally {
+                // Restore default auto-commit behavior
+                conn.setAutoCommit(true);
+            }
+        }
+    }
+
+    /**
      * Loads a scenario from a given JSON file, clears the database, and inserts the new data.
      * @param jsonFile The JSON file containing the scenario data.
      */
@@ -123,66 +154,25 @@ public class ScenarioLoaderService extends BaseDAO {
         try {
             logger.info("Parsing JSON scenario from file: {}", jsonFile.getName());
             ScenarioDTO scenario = objectMapper.readValue(jsonFile, ScenarioDTO.class);
-
-            try (Connection conn = getConnection()) {
-                // Disable auto-commit to start a single large transaction
-                conn.setAutoCommit(false);
-                try {
-                    clearDatabase(conn);
-                    insertScenarioData(conn, scenario);
-
-                    // Commit all changes at once if everything was successful
-                    conn.commit();
-
-                    logger.info("Successfully loaded scenario: {} rooms, {} guests, {} reservations",
-                            scenario.rooms().size(), scenario.guests().size(), scenario.reservations().size());
-                } catch (Exception e) {
-                    // Rollback all changes if any error occurs to maintain data integrity
-                    conn.rollback();
-                    throw e;
-                } finally {
-                    // Restore default auto-commit behavior
-                    conn.setAutoCommit(true);
-                }
-            }
-
+            processAndSaveScenario(scenario);
         } catch (Exception e) {
             logger.error("Failed to load scenario from file: {}", jsonFile.getName(), e);
-            throw new RuntimeException("Could not load scenario", e);
+            throw new RuntimeException("Could not load scenario from file", e);
         }
     }
 
-    // Load scenario directly from an InputStream (safe for classpath resources)
-    public void loadScenarioFromStream(java.io.InputStream inputStream) {
+    /**
+     * Loads a scenario directly from an InputStream (safe for classpath resources).
+     * @param inputStream The input stream containing the JSON data.
+     */
+    public void loadScenarioFromStream(InputStream inputStream) {
         try {
             logger.info("Parsing JSON scenario from stream");
             ScenarioDTO scenario = objectMapper.readValue(inputStream, ScenarioDTO.class);
-
-            try (Connection conn = getConnection()) {
-                // Disable auto-commit to start a single large transaction
-                conn.setAutoCommit(false);
-                try {
-                    clearDatabase(conn);
-                    insertScenarioData(conn, scenario);
-
-                    // Commit all changes at once if everything was successful
-                    conn.commit();
-
-                    logger.info("Successfully loaded scenario: {} rooms, {} guests, {} reservations",
-                            scenario.rooms().size(), scenario.guests().size(), scenario.reservations().size());
-                } catch (Exception e) {
-                    // Rollback all changes if any error occurs to maintain data integrity
-                    conn.rollback();
-                    throw e;
-                } finally {
-                    // Restore default auto-commit behavior
-                    conn.setAutoCommit(true);
-                }
-            }
-
+            processAndSaveScenario(scenario);
         } catch (Exception e) {
             logger.error("Failed to load scenario from stream", e);
-            throw new RuntimeException("Could not load scenario", e);
+            throw new RuntimeException("Could not load scenario from stream", e);
         }
     }
 }

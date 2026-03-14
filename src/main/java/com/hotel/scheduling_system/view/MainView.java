@@ -5,7 +5,7 @@ import com.hotel.scheduling_system.model.Guest;
 import com.hotel.scheduling_system.model.HousekeepingTask;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
-import com.hotel.scheduling_system.service.ScenarioLoaderService; // הוספנו את ה-Import
+import com.hotel.scheduling_system.service.ScenarioLoaderService;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
@@ -20,8 +20,6 @@ import javafx.stage.FileChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.util.ResourceUtils;
-
 import java.io.File;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -36,7 +34,6 @@ public class MainView extends VBox {
     private static final Logger logger = LoggerFactory.getLogger(MainView.class);
 
     private final AppController appController;
-    private final ScenarioLoaderService scenarioLoaderService;
     private final GanttChart ganttChart;
     private final UnassignedPanel unassignedPanel;
     private final Button saveBtn;
@@ -48,7 +45,6 @@ public class MainView extends VBox {
 
     public MainView(AppController appController, ScenarioLoaderService scenarioLoaderService) {
         this.appController = appController;
-        this.scenarioLoaderService = scenarioLoaderService;
         this.ganttChart = new GanttChart();
         this.unassignedPanel = new UnassignedPanel();
 
@@ -119,7 +115,6 @@ public class MainView extends VBox {
                 resetDashboardState("Light JSON scenario loaded successfully!");
             } catch (Exception ex) {
                 logger.error("Failed to load light scenario", ex);
-                // Print the exact message to the alert for easier debugging
                 new Alert(Alert.AlertType.ERROR, "Failed to load light scenario: " + ex.getMessage()).showAndWait();
             }
         });
@@ -133,7 +128,6 @@ public class MainView extends VBox {
 
             if (selectedFile != null) {
                 try {
-                    // כאן אנחנו משתמשים ב-Service החדש עבור הקובץ שהמשתמש בחר
                     scenarioLoaderService.loadScenarioFromFile(selectedFile);
                     resetDashboardState("Custom JSON scenario loaded successfully from:\n" + selectedFile.getName());
                 } catch (Exception ex) {
@@ -211,7 +205,6 @@ public class MainView extends VBox {
         approvedDowngrades.clear();
         saveBtn.setDisable(true);
 
-        // Initialize to empty collections if they are null to prevent NullPointerException
         if (currentAssignments == null) {
             currentAssignments = new java.util.HashMap<>();
         }
@@ -219,14 +212,13 @@ public class MainView extends VBox {
             currentUnassigned = new java.util.ArrayList<>();
         }
 
-        // Clear existing data
         currentAssignments.clear();
         currentUnassigned.clear();
 
-        // Update the UI components with empty data
         ganttChart.updateData(currentAssignments, approvedDowngrades);
         unassignedPanel.updateData(currentUnassigned);
     }
+
     private void refreshDashboard() {
         if (currentAssignments == null) return;
         boolean hasPendingDowngrades = ganttChart.updateData(currentAssignments, approvedDowngrades);

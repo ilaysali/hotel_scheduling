@@ -7,21 +7,18 @@ import com.hotel.scheduling_system.model.GeneticOptimizer;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.model.ScheduleSolution;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class SchedulingService {
 
     private final ReservationDAO reservationDAO;
     private final RoomDAO roomDAO;
-
-    public SchedulingService(ReservationDAO reservationDAO, RoomDAO roomDAO) {
-        this.reservationDAO = reservationDAO;
-        this.roomDAO = roomDAO;
-    }
 
     public Map<String, Object> generateSchedule() {
         List<Reservation> reservations = reservationDAO.getAllReservations();
@@ -38,7 +35,6 @@ public class SchedulingService {
         return processor.process(bestSolution, reservations, rooms);
     }
 
-    // The new function that iterates over the results and saves them
     public void saveScheduleToDatabase(Map<Room, List<Reservation>> assignments) {
         for (Map.Entry<Room, List<Reservation>> entry : assignments.entrySet()) {
             Room assignedRoom = entry.getKey();

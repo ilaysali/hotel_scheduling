@@ -25,34 +25,22 @@ public class GeneticOptimizer {
         int stagnationCounter = 0;
         double bestFitnessSoFar = -1;
 
-        ScheduleSolution overallBestSolution = population.get(0);
+        // Initialize overallBestSolution with a copy of the first element to avoid reference issues later
+        ScheduleSolution overallBestSolution = new ScheduleSolution(population.get(0).getGenes(), rooms);
+        overallBestSolution.calculateFitness(reservations, rooms);
 
         while (true) {
-            // Condition 1: Generation limit
-            if (generation >= MAX_GENERATIONS) {
-                System.out.println("Algorithm stopped: Reached generation limit.");
-                break;
-            }
+            // OPTIMIZATION: Removed the heavy stream().max() call from the loop.
+            // We now rely on the fact that evolve() sorts the population, making population.get(0) the best.
 
-            // Condition 2: Time limit
-            if (System.currentTimeMillis() - startTime > MAX_TIME_MS) {
-                System.out.println("Algorithm stopped: Reached time limit.");
-                break;
-            }
-
-            evolve(reservations, rooms);
-            generation++;
-
-            ScheduleSolution currentBest = population.stream()
-                    .max(Comparator.comparingDouble(ScheduleSolution::getFitness))
-                    .orElseThrow();
+            ScheduleSolution currentBest = population.get(0); // Safely get the best after initialization/evolution
 
             if (currentBest.getFitness() > overallBestSolution.getFitness()) {
-                overallBestSolution = new ScheduleSolution(currentBest.getGenes());
+                overallBestSolution = new ScheduleSolution(currentBest.getGenes(), rooms);
                 overallBestSolution.calculateFitness(reservations, rooms);
             }
 
-            // Condition 3: Stagnation
+            // Condition 3: Stagnation Check
             if (currentBest.getFitness() <= bestFitnessSoFar) {
                 stagnationCounter++;
                 if (stagnationCounter >= MAX_STAGNATION) {
@@ -63,13 +51,28 @@ public class GeneticOptimizer {
                 bestFitnessSoFar = currentBest.getFitness();
                 stagnationCounter = 0;
             }
+
+            // Check generation limit
+            if (generation >= MAX_GENERATIONS) {
+                System.out.println("Algorithm stopped: Reached generation limit.");
+                break;
+            }
+
+            // Check time limit
+            if (System.currentTimeMillis() - startTime > MAX_TIME_MS) {
+                System.out.println("Algorithm stopped: Reached time limit.");
+                break;
+            }
+
+            evolve(reservations, rooms);
+            generation++;
         }
 
         return overallBestSolution;
     }
 
     private void evolve(List<Reservation> reservations, List<Room> rooms) {
-        List<ScheduleSolution> nextGen = new ArrayList<>();
+        List<ScheduleSolution> nextGen = new ArrayList<>(POPULATION_SIZE);
 
         // Elitism - Sort population from best to worst
         population.sort(Comparator.comparingDouble(ScheduleSolution::getFitness).reversed());
@@ -81,7 +84,7 @@ public class GeneticOptimizer {
             ScheduleSolution p1 = tournamentSelection();
             ScheduleSolution p2 = tournamentSelection();
 
-            ScheduleSolution child = crossover(p1, p2);
+            ScheduleSolution child = crossover(p1, p2, rooms); // Updated to pass 'rooms'
             child.mutate(MUTATION_RATE, rooms);
 
             // Only new children need calculations
@@ -102,17 +105,21 @@ public class GeneticOptimizer {
         return best;
     }
 
-    private ScheduleSolution crossover(ScheduleSolution p1, ScheduleSolution p2) {
+    private ScheduleSolution crossover(ScheduleSolution p1, ScheduleSolution p2, List<Room> rooms) {
         int cut = random.nextInt(p1.getGenes().length);
         int[] childGenes = new int[p1.getGenes().length];
         System.arraycopy(p1.getGenes(), 0, childGenes, 0, cut);
         System.arraycopy(p2.getGenes(), cut, childGenes, cut, p1.getGenes().length - cut);
-        return new ScheduleSolution(childGenes);
+
+        // Pass rooms to the new constructor
+        return new ScheduleSolution(childGenes, rooms);
     }
 
     private void initializePopulation(List<Reservation> reservations, List<Room> rooms) {
+        population = new ArrayList<>(POPULATION_SIZE);
         for (int i = 0; i < POPULATION_SIZE; i++) {
-            ScheduleSolution sol = new ScheduleSolution(reservations.size());
+            // Pass rooms to the updated constructor
+            ScheduleSolution sol = new ScheduleSolution(reservations.size(), rooms);
             for (int j = 0; j < reservations.size(); j++) {
                 Room randomRoom = rooms.get(random.nextInt(rooms.size()));
                 sol.getGenes()[j] = randomRoom.id();
@@ -120,5 +127,7 @@ public class GeneticOptimizer {
             sol.calculateFitness(reservations, rooms);
             population.add(sol);
         }
+        // Ensure the initial population is sorted so population.get(0) is the best right away
+        population.sort(Comparator.comparingDouble(ScheduleSolution::getFitness).reversed());
     }
 }
