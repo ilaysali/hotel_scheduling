@@ -72,7 +72,7 @@ public class MainView extends VBox {
         MenuButton loadDataBtn = new MenuButton("1. Load Data Scenario");
         loadDataBtn.setStyle("-fx-base: #FF9800; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        MenuItem heavyMockItem = new MenuItem("Load Heavy Scenario (Auto-Generated)");
+        MenuItem heavyMockItem = new MenuItem("Load Heavy Scenario (JSON)");
         MenuItem lightMockItem = new MenuItem("Load Light Scenario (JSON)");
         MenuItem customJsonItem = new MenuItem("Upload Custom JSON...");
 
