@@ -10,7 +10,6 @@ import com.hotel.scheduling_system.dto.ScenarioDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -26,28 +25,6 @@ public class ScenarioLoaderService extends BaseDAO {
         this.objectMapper = new ObjectMapper();
         // Register module to properly parse LocalDate from JSON strings like "2026-04-10"
         this.objectMapper.registerModule(new JavaTimeModule());
-    }
-
-    /**
-     * Loads a scenario from a given JSON file, clears the database, and inserts the new data.
-     * @param jsonFile The JSON file containing the scenario data.
-     */
-    public void loadScenarioFromFile(File jsonFile) {
-        try {
-            logger.info("Parsing JSON scenario from file: {}", jsonFile.getName());
-            ScenarioDTO scenario = objectMapper.readValue(jsonFile, ScenarioDTO.class);
-
-            try (Connection conn = getConnection()) {
-                clearDatabase(conn);
-                insertScenarioData(conn, scenario);
-                logger.info("Successfully loaded scenario: {} rooms, {} guests, {} reservations",
-                        scenario.rooms().size(), scenario.guests().size(), scenario.reservations().size());
-            }
-
-        } catch (Exception e) {
-            logger.error("Failed to load scenario from file: {}", jsonFile.getName(), e);
-            throw new RuntimeException("Could not load scenario", e);
-        }
     }
 
     private void clearDatabase(Connection conn) throws Exception {
@@ -95,40 +72,86 @@ public class ScenarioLoaderService extends BaseDAO {
         }
 
         // 3. Insert Reservations and Reservation_Rooms
-        // Added room_type to the SQL query and values
         String insertResSql = "INSERT INTO Reservations (reservation_id, guest_id, preferred_view, room_type) VALUES (?, ?, ?, ?)";
         String insertResRoomsSql = "INSERT INTO Reservation_Rooms (reservation_id, room_id, start_date, end_date) VALUES (?, ?, ?, ?)";
 
         try (PreparedStatement resStmt = conn.prepareStatement(insertResSql);
              PreparedStatement resRoomsStmt = conn.prepareStatement(insertResRoomsSql)) {
 
+            // Pre-calculate default room IDs per room type to avoid O(N*M) complexity in the loop
+            java.util.Map<String, Integer> defaultRoomIdsByType = new java.util.HashMap<>();
+            int absoluteFallbackRoomId = -1;
+
+            // Build the quick-lookup map
+            if (!scenario.rooms().isEmpty()) {
+                absoluteFallbackRoomId = scenario.rooms().get(0).id();
+                for (RoomDTO room : scenario.rooms()) {
+                    // putIfAbsent ensures we only keep the FIRST room ID of each type we encounter
+                    defaultRoomIdsByType.putIfAbsent(room.type(), room.id());
+                }
+            }
+
             for (ReservationDTO res : scenario.reservations()) {
-                // Insert main reservation with all 4 parameters
+                // Insert main reservation
                 resStmt.setInt(1, res.id());
                 resStmt.setInt(2, res.guestId());
                 resStmt.setString(3, res.preferredView());
                 resStmt.setString(4, res.roomType());
                 resStmt.addBatch();
 
-                // Find a valid room ID from the loaded scenario to satisfy the Foreign Key constraint.
-                // It tries to find a room matching the requested type, or defaults to the first available room.
-                int dummyRoomId = scenario.rooms().stream()
-                        .filter(r -> r.type().equals(res.roomType()))
-                        .findFirst()
-                        .map(com.hotel.scheduling_system.dto.RoomDTO::id)
-                        .orElse(scenario.rooms().get(0).id());
+                // Get the dummy room ID from the pre-calculated map in O(1) time
+                int dummyRoomId = defaultRoomIdsByType.getOrDefault(res.roomType(), absoluteFallbackRoomId);
 
-                // Assign the valid dummy room ID instead of -1
+                // Assign the valid dummy room ID
                 resRoomsStmt.setInt(1, res.id());
                 resRoomsStmt.setInt(2, dummyRoomId);
                 resRoomsStmt.setDate(3, java.sql.Date.valueOf(res.startDate()));
                 resRoomsStmt.setDate(4, java.sql.Date.valueOf(res.endDate()));
                 resRoomsStmt.addBatch();
             }
+
             resStmt.executeBatch();
             resRoomsStmt.executeBatch();
         }
     }
+
+    /**
+     * Loads a scenario from a given JSON file, clears the database, and inserts the new data.
+     * @param jsonFile The JSON file containing the scenario data.
+     */
+    public void loadScenarioFromFile(File jsonFile) {
+        try {
+            logger.info("Parsing JSON scenario from file: {}", jsonFile.getName());
+            ScenarioDTO scenario = objectMapper.readValue(jsonFile, ScenarioDTO.class);
+
+            try (Connection conn = getConnection()) {
+                // Disable auto-commit to start a single large transaction
+                conn.setAutoCommit(false);
+                try {
+                    clearDatabase(conn);
+                    insertScenarioData(conn, scenario);
+
+                    // Commit all changes at once if everything was successful
+                    conn.commit();
+
+                    logger.info("Successfully loaded scenario: {} rooms, {} guests, {} reservations",
+                            scenario.rooms().size(), scenario.guests().size(), scenario.reservations().size());
+                } catch (Exception e) {
+                    // Rollback all changes if any error occurs to maintain data integrity
+                    conn.rollback();
+                    throw e;
+                } finally {
+                    // Restore default auto-commit behavior
+                    conn.setAutoCommit(true);
+                }
+            }
+
+        } catch (Exception e) {
+            logger.error("Failed to load scenario from file: {}", jsonFile.getName(), e);
+            throw new RuntimeException("Could not load scenario", e);
+        }
+    }
+
     // Load scenario directly from an InputStream (safe for classpath resources)
     public void loadScenarioFromStream(java.io.InputStream inputStream) {
         try {
@@ -136,10 +159,25 @@ public class ScenarioLoaderService extends BaseDAO {
             ScenarioDTO scenario = objectMapper.readValue(inputStream, ScenarioDTO.class);
 
             try (Connection conn = getConnection()) {
-                clearDatabase(conn);
-                insertScenarioData(conn, scenario);
-                logger.info("Successfully loaded scenario: {} rooms, {} guests, {} reservations",
-                        scenario.rooms().size(), scenario.guests().size(), scenario.reservations().size());
+                // Disable auto-commit to start a single large transaction
+                conn.setAutoCommit(false);
+                try {
+                    clearDatabase(conn);
+                    insertScenarioData(conn, scenario);
+
+                    // Commit all changes at once if everything was successful
+                    conn.commit();
+
+                    logger.info("Successfully loaded scenario: {} rooms, {} guests, {} reservations",
+                            scenario.rooms().size(), scenario.guests().size(), scenario.reservations().size());
+                } catch (Exception e) {
+                    // Rollback all changes if any error occurs to maintain data integrity
+                    conn.rollback();
+                    throw e;
+                } finally {
+                    // Restore default auto-commit behavior
+                    conn.setAutoCommit(true);
+                }
             }
 
         } catch (Exception e) {
