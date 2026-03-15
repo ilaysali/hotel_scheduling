@@ -33,11 +33,8 @@ public class ScenarioLoaderService extends BaseDAO {
         try (Statement statement = conn.createStatement()) {
             statement.executeUpdate("SET FOREIGN_KEY_CHECKS = 0");
             statement.executeUpdate("TRUNCATE TABLE Reservation_Rooms");
-            statement.executeUpdate("TRUNCATE TABLE Payments");
             statement.executeUpdate("TRUNCATE TABLE Reservations");
-            statement.executeUpdate("TRUNCATE TABLE Housekeeping_Schedule");
             statement.executeUpdate("TRUNCATE TABLE Guests");
-            statement.executeUpdate("TRUNCATE TABLE Staff");
             statement.executeUpdate("TRUNCATE TABLE Rooms");
             statement.executeUpdate("SET FOREIGN_KEY_CHECKS = 1");
         }

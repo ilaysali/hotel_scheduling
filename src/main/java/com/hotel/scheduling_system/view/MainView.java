@@ -3,12 +3,9 @@ package com.hotel.scheduling_system.view;
 import com.hotel.scheduling_system.controller.AppController;
 import com.hotel.scheduling_system.controller.PostProcessor.ProcessingResult;
 import com.hotel.scheduling_system.model.Guest;
-import com.hotel.scheduling_system.model.HousekeepingTask;
 import com.hotel.scheduling_system.model.Reservation;
 import com.hotel.scheduling_system.model.Room;
 import com.hotel.scheduling_system.service.ScenarioLoaderService;
-import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -23,7 +20,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import java.io.File;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -84,10 +80,7 @@ public class MainView extends VBox {
         Button addResBtn = new Button("➕ New Reservation");
         addResBtn.setStyle("-fx-base: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        Button housekeepingBtn = new Button("Housekeeping");
-        housekeepingBtn.setStyle("-fx-base: #9C27B0; -fx-text-fill: white; -fx-font-weight: bold;");
-
-        HBox buttonsBox = new HBox(15, loadDataBtn, generateBtn, saveBtn, addResBtn, housekeepingBtn);
+        HBox buttonsBox = new HBox(15, loadDataBtn, generateBtn, saveBtn, addResBtn);
         HBox dashboard = new HBox(20, ganttChart, unassignedPanel);
 
         heavyMockItem.setOnAction(e -> {
@@ -138,7 +131,6 @@ public class MainView extends VBox {
             }
         });
 
-        housekeepingBtn.setOnAction(e -> openHousekeepingDialog());
         addResBtn.setOnAction(e -> openNewReservationDialog());
 
         ganttChart.setOnRejectCallback(rejectedRes -> {
@@ -219,68 +211,6 @@ public class MainView extends VBox {
         boolean hasPendingDowngrades = ganttChart.updateData(currentAssignments, approvedDowngrades);
         unassignedPanel.updateData(currentUnassigned);
         saveBtn.setDisable(currentAssignments.isEmpty() || hasPendingDowngrades);
-    }
-
-    private void openHousekeepingDialog() {
-        Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("Daily Housekeeping Report");
-        dialog.setHeaderText("View and assign cleaning tasks based on AI Schedule");
-
-        VBox vbox = new VBox(10);
-        HBox topControls = new HBox(10);
-        topControls.setAlignment(Pos.CENTER_LEFT);
-
-        DatePicker datePicker = new DatePicker(LocalDate.of(2026, 4, 10));
-        Button loadBtn = new Button("Generate Tasks");
-        loadBtn.setStyle("-fx-base: #FFC107; -fx-font-weight: bold;");
-
-        topControls.getChildren().addAll(new Label("Select Date:"), datePicker, loadBtn);
-
-        TableView<HousekeepingTask> table = new TableView<>();
-
-        TableColumn<HousekeepingTask, Integer> roomCol = new TableColumn<>("Room");
-        roomCol.setCellValueFactory(data -> new SimpleIntegerProperty(data.getValue().roomNumber()).asObject());
-
-        TableColumn<HousekeepingTask, String> staffCol = new TableColumn<>("Assigned Staff");
-        staffCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().staffName()));
-
-        TableColumn<HousekeepingTask, String> statusCol = new TableColumn<>("Status");
-        statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().status()));
-
-        table.getColumns().add(roomCol);
-        table.getColumns().add(staffCol);
-        table.getColumns().add(statusCol);
-
-        table.setPrefWidth(350);
-        table.setPrefHeight(300);
-
-        loadBtn.setOnAction(e -> {
-            LocalDate date = datePicker.getValue();
-            if (date != null) {
-                List<Integer> activeRooms = new ArrayList<>();
-                if (currentAssignments != null) {
-                    for (Map.Entry<Room, List<Reservation>> entry : currentAssignments.entrySet()) {
-                        boolean needsCleaning = entry.getValue().stream().anyMatch(res ->
-                                !date.isBefore(res.startDate()) && !date.isAfter(res.endDate())
-                        );
-                        if (needsCleaning) {
-                            activeRooms.add(entry.getKey().id());
-                        }
-                    }
-                }
-                if (activeRooms.isEmpty()) {
-                    activeRooms.addAll(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
-                }
-                List<HousekeepingTask> tasks = appController.generateAndGetHousekeepingReport(date, activeRooms);
-                table.getItems().setAll(tasks);
-            }
-        });
-
-        vbox.getChildren().addAll(topControls, table);
-        dialog.getDialogPane().setContent(vbox);
-        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-
-        dialog.showAndWait();
     }
 
     private void openNewReservationDialog() {
