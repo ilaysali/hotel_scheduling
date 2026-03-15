@@ -43,7 +43,7 @@ public class PostProcessor {
             int assignedRoomId = genes[i];
             Room assignedRoom = roomMap.get(assignedRoomId);
 
-            // Handle invalid room assignments gracefully
+            // Handle invalid room assignments
             if (assignedRoom == null) {
                 unassignedList.add(currentRes);
                 continue;
@@ -66,8 +66,6 @@ public class PostProcessor {
                 existingRoomSchedule.add(currentRes);
             }
         }
-
-        // Return the strongly-typed record instead of a generic Map
         return new ProcessingResult(roomAssignments, unassignedList, winningSolution.getFitness());
     }
 }
