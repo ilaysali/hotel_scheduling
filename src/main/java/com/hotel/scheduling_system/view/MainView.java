@@ -33,6 +33,7 @@ public class MainView extends VBox {
     private final AppController appController;
     private final GanttChart ganttChart;
     private final UnassignedPanel unassignedPanel;
+    private final AllReservationsPanel allReservationsPanel;
     private final Button saveBtn;
     private final Label fitnessLabel;
 
@@ -44,6 +45,10 @@ public class MainView extends VBox {
         this.appController = appController;
         this.ganttChart = new GanttChart();
         this.unassignedPanel = new UnassignedPanel();
+        this.allReservationsPanel = new AllReservationsPanel();
+
+        // Ensure the panel starts empty regardless of what is in the database
+        allReservationsPanel.updateData(new java.util.ArrayList<>());
 
         setPadding(new Insets(20));
         setSpacing(15);
@@ -81,7 +86,7 @@ public class MainView extends VBox {
         addResBtn.setStyle("-fx-base: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
 
         HBox buttonsBox = new HBox(15, loadDataBtn, generateBtn, saveBtn, addResBtn);
-        HBox dashboard = new HBox(20, ganttChart, unassignedPanel);
+        HBox dashboard = new HBox(20, ganttChart, unassignedPanel, allReservationsPanel);
 
         heavyMockItem.setOnAction(e -> {
             try {
@@ -92,6 +97,8 @@ public class MainView extends VBox {
                 }
                 scenarioLoaderService.loadScenarioFromStream(is);
                 resetDashboardState("Heavy JSON scenario loaded successfully!");
+                // Update All Reservations Panel immediately after loading
+                allReservationsPanel.updateData(appController.getAllReservations());
             } catch (Exception ex) {
                 logger.error("Failed to load heavy scenario", ex);
                 new Alert(Alert.AlertType.ERROR, "Failed to load heavy scenario: " + ex.getMessage()).showAndWait();
@@ -107,6 +114,8 @@ public class MainView extends VBox {
                 }
                 scenarioLoaderService.loadScenarioFromStream(is);
                 resetDashboardState("Light JSON scenario loaded successfully!");
+                // Update All Reservations Panel immediately after loading
+                allReservationsPanel.updateData(appController.getAllReservations());
             } catch (Exception ex) {
                 logger.error("Failed to load light scenario", ex);
                 new Alert(Alert.AlertType.ERROR, "Failed to load light scenario: " + ex.getMessage()).showAndWait();
@@ -124,6 +133,8 @@ public class MainView extends VBox {
                 try {
                     scenarioLoaderService.loadScenarioFromFile(selectedFile);
                     resetDashboardState("Custom JSON scenario loaded successfully from:\n" + selectedFile.getName());
+                    // Update All Reservations Panel immediately after loading
+                    allReservationsPanel.updateData(appController.getAllReservations());
                 } catch (Exception ex) {
                     logger.error("Failed to load custom scenario", ex);
                     new Alert(Alert.AlertType.ERROR, "Failed to load the selected file. Ensure the JSON format is correct.").showAndWait();
@@ -204,12 +215,26 @@ public class MainView extends VBox {
 
         ganttChart.updateData(currentAssignments, approvedDowngrades);
         unassignedPanel.updateData(currentUnassigned);
+        // Removed resetting allReservationsPanel to empty here, as it's now updated immediately after loading
     }
 
     private void refreshDashboard() {
         if (currentAssignments == null) return;
         boolean hasPendingDowngrades = ganttChart.updateData(currentAssignments, approvedDowngrades);
         unassignedPanel.updateData(currentUnassigned);
+
+        // Optional: Keep this if you want to ensure the list is synced after generating,
+        // though it's technically redundant if the pool of reservations doesn't change during generation.
+        java.util.List<Reservation> allRes = new java.util.ArrayList<>();
+        for (List<Reservation> roomSchedule : currentAssignments.values()) {
+            allRes.addAll(roomSchedule);
+        }
+        if (currentUnassigned != null) {
+            allRes.addAll(currentUnassigned);
+        }
+        allRes.sort(java.util.Comparator.comparingInt(Reservation::id));
+        allReservationsPanel.updateData(allRes);
+
         saveBtn.setDisable(currentAssignments.isEmpty() || hasPendingDowngrades);
     }
 
@@ -277,6 +302,9 @@ public class MainView extends VBox {
                         endDatePicker.getValue(),
                         finalPreferredView
                 );
+
+                // Update All Reservations Panel immediately after adding a new reservation
+                allReservationsPanel.updateData(appController.getAllReservations());
 
                 new Alert(Alert.AlertType.INFORMATION, "New reservation added! Click 'Generate Schedule' to see how the AI handles it.").showAndWait();
             }

@@ -40,4 +40,9 @@ public class AppController {
     public int getOrCreateGuest(String fullName) {
         return guestDAO.getOrCreateGuest(fullName);
     }
+
+    public List<Reservation> getAllReservations() {
+        // Fetching all reservations from the database via DAO
+        return reservationDAO.getAllReservations();
+    }
 }
