@@ -30,7 +30,7 @@ public class SchedulingSystemApplication extends Application {
 		// Show the window
 		primaryStage.setTitle("Hotel Scheduling System");
 		primaryStage.setScene(scene);
-		//primaryStage.setMaximized(true);
+		primaryStage.setMaximized(true);
 
 		primaryStage.show();
 	}
