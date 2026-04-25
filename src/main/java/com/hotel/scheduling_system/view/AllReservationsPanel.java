@@ -3,6 +3,7 @@ package com.hotel.scheduling_system.view;
 import com.hotel.scheduling_system.model.Reservation;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import java.util.List;
 
@@ -12,13 +13,14 @@ public class AllReservationsPanel extends VBox {
     public AllReservationsPanel() {
         setSpacing(10);
 
+
         // Setup title label
         Label title = new Label("All Reservations");
         title.setStyle("-fx-font-weight: bold; -fx-text-fill: #2196F3;"); // Blue color for distinction
 
         // Initialize ListView
         listView = new ListView<>();
-        listView.setPrefWidth(280); // Slightly wider to accommodate guest names
+        VBox.setVgrow(listView, Priority.ALWAYS); // Allow the list to stretch vertically to fill the screen
 
         getChildren().addAll(title, listView);
     }

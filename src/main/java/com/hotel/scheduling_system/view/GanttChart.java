@@ -39,11 +39,18 @@ public class GanttChart extends VBox {
         title.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: green;");
 
         drawingPane = new Pane();
-        drawingPane.setMinSize(700, 400);
+
+        // FOR PERFORMANCE BOOST
+        drawingPane.setCache(true);
+        drawingPane.setCacheHint(javafx.scene.CacheHint.SPEED);
 
         ScrollPane scrollPane = new ScrollPane(drawingPane);
-        scrollPane.setPrefSize(700, 400);
         scrollPane.setStyle("-fx-background-color: transparent;");
+
+        // Allow the ScrollPane to stretch vertically
+        VBox.setVgrow(scrollPane, javafx.scene.layout.Priority.ALWAYS);
+
+        this.setMinWidth(350);
 
         getChildren().addAll(title, scrollPane);
     }
@@ -65,13 +72,19 @@ public class GanttChart extends VBox {
 
         if (earliestDate == null) return false;
 
-        // Collect all UI nodes in a list to prevent multiple layout recalculations
         List<Node> nodesToAdd = new ArrayList<>();
 
         int dayWidth = 50;
         int barHeight = 30;
         int roomLabelWidth = 100;
         long totalDays = ChronoUnit.DAYS.between(earliestDate, latestDate) + 2;
+
+        double totalWidth = roomLabelWidth + (totalDays * dayWidth) + 50;
+        // 70 is the starting yOffset, 60 is the space per room
+        double totalHeight = 70 + (assignments.size() * 60) + 20;
+
+        drawingPane.setPrefSize(totalWidth, totalHeight);
+        drawingPane.setMinSize(totalWidth, totalHeight);
 
         int rulerY = 30;
         Line rulerLine = new Line(roomLabelWidth, rulerY, roomLabelWidth + (totalDays * dayWidth), rulerY);
@@ -90,9 +103,8 @@ public class GanttChart extends VBox {
             dateLabel.setLayoutY(rulerY - 20);
             dateLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: dimgray;");
 
-            Line gridLine = new Line(xPos, rulerY, xPos, 800);
-            gridLine.setStroke(Color.LIGHTGRAY);
-            gridLine.getStrokeDashArray().addAll(5d, 5d);
+            Line gridLine = new Line(xPos, rulerY, xPos, totalHeight);
+            gridLine.setStroke(Color.rgb(235, 235, 235));
 
             nodesToAdd.add(gridLine);
             nodesToAdd.add(tick);
@@ -154,6 +166,7 @@ public class GanttChart extends VBox {
                 }
                 if (isViewMismatch) {
                     bar.setEffect(new javafx.scene.effect.InnerShadow(10, Color.DARKRED));
+                    bar.setCache(true); // Cache the effect to prevent lag
                 }
 
                 Label resLabel = new Label("Res " + res.id());
@@ -185,7 +198,6 @@ public class GanttChart extends VBox {
                 Tooltip.install(bar, tooltip);
                 Tooltip.install(resLabel, tooltip);
 
-                // Create and show the menu ONLY when the user right-clicks.
                 javafx.event.EventHandler<javafx.scene.input.ContextMenuEvent> contextMenuHandler = e -> {
                     ContextMenu contextMenu = new ContextMenu();
 
@@ -216,10 +228,7 @@ public class GanttChart extends VBox {
             }
             yOffset += 60;
         }
-
-        // Render all UI elements to the screen in a single, fast operation
         drawingPane.getChildren().addAll(nodesToAdd);
-
         return hasPendingDowngrades;
     }
 }

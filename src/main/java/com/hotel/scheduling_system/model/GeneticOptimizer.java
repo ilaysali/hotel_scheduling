@@ -55,6 +55,9 @@ public class GeneticOptimizer {
                 break;
             }
 
+            // Log the best fitness for the current generation
+            System.out.printf("Generation %d - Best Fitness: %.2f%n", generation, currentBest.getFitness());
+
             population = evolve(population, reservations, rooms);
             generation++;
         }

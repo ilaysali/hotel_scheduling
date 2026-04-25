@@ -86,7 +86,41 @@ public class MainView extends VBox {
         addResBtn.setStyle("-fx-base: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
 
         HBox buttonsBox = new HBox(15, loadDataBtn, generateBtn, saveBtn, addResBtn);
-        HBox dashboard = new HBox(20, ganttChart, unassignedPanel, allReservationsPanel);
+
+        // Create a strict grid layout that prevents components from resizing unexpectedly
+        GridPane dashboard = new GridPane();
+        dashboard.setHgap(15); // Gap between columns
+        VBox.setVgrow(dashboard, Priority.ALWAYS);
+
+        // Column 0: Gantt Chart. Takes all available space on the screen!
+        javafx.scene.layout.ColumnConstraints colGantt = new javafx.scene.layout.ColumnConstraints();
+        colGantt.setHgrow(Priority.ALWAYS);
+        colGantt.setMinWidth(400); // Prevents it from disappearing on very small screens
+
+        // Column 1: Unassigned Panel - Absolute lock!
+        javafx.scene.layout.ColumnConstraints colUnassigned = new javafx.scene.layout.ColumnConstraints();
+        colUnassigned.setMinWidth(250); // Blocks shrinking during schedule generation
+        colUnassigned.setMaxWidth(250); // Blocks unnecessary growth
+        colUnassigned.setPrefWidth(250);
+
+        // Column 2: All Reservations Panel - Absolute lock!
+        javafx.scene.layout.ColumnConstraints colAllRes = new javafx.scene.layout.ColumnConstraints();
+        colAllRes.setMinWidth(300); // Blocks shrinking during schedule generation
+        colAllRes.setMaxWidth(300); // Blocks unnecessary growth
+        colAllRes.setPrefWidth(300);
+
+        // Apply column constraints to the grid
+        dashboard.getColumnConstraints().addAll(colGantt, colUnassigned, colAllRes);
+
+        // Add components to the columns (node, columnIndex, rowIndex)
+        dashboard.add(ganttChart, 0, 0);
+        dashboard.add(unassignedPanel, 1, 0);
+        dashboard.add(allReservationsPanel, 2, 0);
+
+        // Force all components to stretch downwards to the bottom of the window
+        GridPane.setVgrow(ganttChart, Priority.ALWAYS);
+        GridPane.setVgrow(unassignedPanel, Priority.ALWAYS);
+        GridPane.setVgrow(allReservationsPanel, Priority.ALWAYS);
 
         heavyMockItem.setOnAction(e -> {
             try {
@@ -215,7 +249,6 @@ public class MainView extends VBox {
 
         ganttChart.updateData(currentAssignments, approvedDowngrades);
         unassignedPanel.updateData(currentUnassigned);
-        // Removed resetting allReservationsPanel to empty here, as it's now updated immediately after loading
     }
 
     private void refreshDashboard() {

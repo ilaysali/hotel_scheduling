@@ -3,6 +3,7 @@ package com.hotel.scheduling_system.view;
 import com.hotel.scheduling_system.model.Reservation;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import java.util.List;
 
@@ -15,7 +16,7 @@ public class UnassignedPanel extends VBox {
         title.setStyle("-fx-font-weight: bold; -fx-text-fill: red;");
 
         listView = new ListView<>();
-        listView.setPrefWidth(250);
+        VBox.setVgrow(listView, Priority.ALWAYS); // Allow the list to stretch vertically to fill the screen
         getChildren().addAll(title, listView);
     }
 
