@@ -18,6 +18,7 @@ public class ScheduleSolution {
     private final List<Reservation>[] roomSchedulesCache;
     private final Room[] fastRoomLookup;
 
+    // list of constrains
     private static final double W_HARD = 100000.0;
     private static final double W_DOWNGRADE_PER_NIGHT = 2000.0;
     private static final double W_UPGRADE_PER_NIGHT = 200.0;
@@ -25,7 +26,17 @@ public class ScheduleSolution {
     private static final double B_PERFECT_MATCH = 500.0;
     private static final double W_VIEW_MISMATCH = 400.0;
 
-    @SuppressWarnings("unchecked")
+    private static final double AI_START_SCORE = 1_000_000.0;
+    private static final double CAPACITY_BUFFER_MULTIPLIER = 1.1;
+
+    /**
+     * Initializes a new schedule solution with an empty set of genes.
+     * Sets up the fast room lookup array and initializes the room schedules cache
+     * based on the given list of rooms and the total number of reservations.
+     *
+     * @param numReservations the total number of reservations to be scheduled
+     * @param rooms the list of available rooms in the hotel
+     */
     public ScheduleSolution(int numReservations, List<Room> rooms) {
         this.genes = new int[numReservations];
 
@@ -35,15 +46,30 @@ public class ScheduleSolution {
 
         for (Room room : rooms) {
             this.fastRoomLookup[room.id()] = room;
-            int initialCapacity = (int) ((numReservations / rooms.size()) * 1.1);
-            this.roomSchedulesCache[room.id()] = new ArrayList<>(initialCapacity);        }
+            int initialCapacity = (int) ((numReservations / rooms.size()) * CAPACITY_BUFFER_MULTIPLIER);
+            this.roomSchedulesCache[room.id()] = new ArrayList<>(initialCapacity);
+        }
     }
 
+    /**
+     * Creates a new schedule solution based on an existing array of genes.
+     * This is typically used when creating offspring during crossover or cloning a solution.
+     *
+     * @param genes the array representing the room assignments for reservations
+     * @param rooms the list of available rooms in the hotel
+     */
     public ScheduleSolution(int[] genes, List<Room> rooms) {
         this(genes.length, rooms);
         System.arraycopy(genes, 0, this.genes, 0, genes.length);
     }
 
+    /**
+     * Calculates the overall fitness score for this schedule solution.
+     * It clears the cache, calculates penalties for room mismatches, evaluates
+     * sequence penalties and bonuses (like gaps and overlaps), and updates the final fitness.
+     *
+     * @param reservations the list of all reservations to be scheduled
+     */
     public void calculateFitness(List<Reservation> reservations) {
         clearCache();
 
@@ -58,9 +84,13 @@ public class ScheduleSolution {
         penalties += sequenceScores[0];
         bonuses += sequenceScores[1];
 
-        this.fitness = 1_000_000.0 - penalties + bonuses;
+        this.fitness = AI_START_SCORE - penalties + bonuses;
     }
 
+    /**
+     * Clears the current room schedules cache.
+     * This ensures no leftover data from previous fitness calculations affects the current one.
+     */
     private void clearCache() {
         for (List<Reservation> list : roomSchedulesCache) {
             if (list != null) {
@@ -69,6 +99,13 @@ public class ScheduleSolution {
         }
     }
 
+    /**
+     * Processes each reservation, assigns it to its designated room based on the genes,
+     * and accumulates the penalty score for room mismatches (like upgrades, downgrades, or view issues).
+     *
+     * @param reservations the list of reservations to assign
+     * @return the total penalty accumulated from individual room matches
+     */
     private double calculateRoomAssignments(List<Reservation> reservations) {
         double localPenalties = 0;
 
@@ -88,6 +125,14 @@ public class ScheduleSolution {
         return localPenalties;
     }
 
+    /**
+     * Evaluates how well a specific reservation matches the assigned room.
+     * Calculates penalties based on room type downgrades, upgrades, and preferred view mismatches.
+     *
+     * @param res the reservation to evaluate
+     * @param room the room assigned to the reservation
+     * @return the calculated penalty for this specific assignment
+     */
     private double evaluateRoomMatch(Reservation res, Room room) {
         double penalty = 0;
 
@@ -116,6 +161,12 @@ public class ScheduleSolution {
         return penalty;
     }
 
+    /**
+     * Iterates through the schedules of all rooms and calculates penalties and bonuses
+     * based on the sequences of reservations (e.g., hard conflicts, fragmentation, perfect back-to-back matches).
+     *
+     * @return an array of two doubles: index 0 contains total sequence penalties, index 1 contains total sequence bonuses
+     */
     private double[] calculateSequenceScores() {
         double seqPenalties = 0;
         double seqBonuses = 0;
@@ -142,10 +193,16 @@ public class ScheduleSolution {
             }
         }
 
-        // Return array where index 0 is penalties and index 1 is bonuses
         return new double[]{seqPenalties, seqBonuses};
     }
 
+    /**
+     * Mutates the current solution by randomly changing the assigned room for each reservation
+     * based on a given mutation probability.
+     *
+     * @param probability the chance (between 0.0 and 1.0) of a single gene being mutated
+     * @param rooms the list of available rooms to pick from during mutation
+     */
     public void mutate(double probability, List<Room> rooms) {
         for (int i = 0; i < genes.length; i++) {
             // Using ThreadLocalRandom for efficiency

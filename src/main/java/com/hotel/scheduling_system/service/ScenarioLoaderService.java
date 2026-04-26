@@ -40,13 +40,33 @@ public class ScenarioLoaderService extends BaseDAO {
         }
     }
 
+    /**
+     * Orchestrates the insertion of all scenario data into the database.
+     * Delegates the actual insertion to specific helper methods.
+     *
+     * @param conn the database connection
+     * @param scenario the scenario data to insert
+     * @throws Exception if any database operation fails
+     */
     private void insertScenarioData(Connection conn, ScenarioDTO scenario) throws Exception {
         logger.info("Inserting new scenario data into the database...");
 
-        // 1. Insert Rooms
+        insertRooms(conn, scenario.rooms());
+        insertGuests(conn, scenario.guests());
+        insertReservations(conn, scenario);
+    }
+
+    /**
+     * Inserts the list of rooms into the database using a batch operation.
+     *
+     * @param conn the database connection
+     * @param rooms the list of rooms to insert
+     * @throws Exception if the batch execution fails
+     */
+    private void insertRooms(Connection conn, java.util.List<RoomDTO> rooms) throws Exception {
         String insertRoomSql = "INSERT INTO Rooms (room_id, room_number, room_type, room_view) VALUES (?, ?, ?, ?)";
         try (PreparedStatement statement = conn.prepareStatement(insertRoomSql)) {
-            for (RoomDTO room : scenario.rooms()) {
+            for (RoomDTO room : rooms) {
                 statement.setInt(1, room.id());
                 statement.setInt(2, room.number());
                 statement.setString(3, room.type());
@@ -55,11 +75,19 @@ public class ScenarioLoaderService extends BaseDAO {
             }
             statement.executeBatch();
         }
+    }
 
-        // 2. Insert Guests
+    /**
+     * Inserts the list of guests into the database using a batch operation.
+     *
+     * @param conn the database connection
+     * @param guests the list of guests to insert
+     * @throws Exception if the batch execution fails
+     */
+    private void insertGuests(Connection conn, java.util.List<GuestDTO> guests) throws Exception {
         String insertGuestSql = "INSERT INTO Guests (guest_id, first_name, last_name, email) VALUES (?, ?, ?, ?)";
         try (PreparedStatement statement = conn.prepareStatement(insertGuestSql)) {
-            for (GuestDTO guest : scenario.guests()) {
+            for (GuestDTO guest : guests) {
                 statement.setInt(1, guest.id());
                 statement.setString(2, guest.firstName());
                 statement.setString(3, guest.lastName());
@@ -68,8 +96,17 @@ public class ScenarioLoaderService extends BaseDAO {
             }
             statement.executeBatch();
         }
+    }
 
-        // 3. Insert Reservations and Reservation_Rooms
+    /**
+     * Inserts reservations and their corresponding room assignments into the database.
+     * Uses a fallback mechanism to assign a dummy room ID based on the requested room type.
+     *
+     * @param conn the database connection
+     * @param scenario the full scenario object to extract room references and reservations
+     * @throws Exception if the batch execution fails
+     */
+    private void insertReservations(Connection conn, ScenarioDTO scenario) throws Exception {
         String insertResSql = "INSERT INTO Reservations (reservation_id, guest_id, preferred_view, room_type) VALUES (?, ?, ?, ?)";
         String insertResRoomsSql = "INSERT INTO Reservation_Rooms (reservation_id, room_id, start_date, end_date) VALUES (?, ?, ?, ?)";
 

@@ -17,6 +17,15 @@ public class GeneticOptimizer {
     private static final int TOURNAMENT_SIZE = 5;
     private static final double MUTATION_RATE = 0.01;
 
+    /**
+     * Executes the genetic algorithm to find the optimal schedule solution.
+     * The algorithm runs until it reaches the maximum number of generations,
+     * hits the time limit, or stagnates for too many generations.
+     *
+     * @param reservations the list of all reservations to be scheduled
+     * @param rooms the list of available rooms
+     * @return the best ScheduleSolution found during the execution
+     */
     public ScheduleSolution solve(List<Reservation> reservations, List<Room> rooms) {
         List<ScheduleSolution> population = initializePopulation(reservations, rooms);
 
@@ -28,7 +37,8 @@ public class GeneticOptimizer {
         ScheduleSolution overallBestSolution = new ScheduleSolution(population.get(0).getGenes(), rooms);
         overallBestSolution.calculateFitness(reservations);
 
-        while (true) {
+        // Loop runs as long as limits (generations, stagnation, and time) are not exceeded
+        while (generation < MAX_GENERATIONS && stagnationCounter < MAX_STAGNATION && (System.currentTimeMillis() - startTime <= MAX_TIME_MS)) {
             ScheduleSolution currentBest = population.get(0);
 
             // Update overall best if the current generation found a better solution
@@ -37,34 +47,40 @@ public class GeneticOptimizer {
                 overallBestSolution.calculateFitness(reservations);
             }
 
-            // Check for stagnation
+            // Update stagnation counter
             if (currentBest.getFitness() <= bestFitnessSoFar) {
                 stagnationCounter++;
-                if (stagnationCounter >= MAX_STAGNATION) {
-                    System.out.println("Algorithm stopped: Stagnation for " + MAX_STAGNATION + " generations.");
-                    break;
-                }
             } else {
                 bestFitnessSoFar = currentBest.getFitness();
                 stagnationCounter = 0;
             }
 
-            // Check absolute limits (time and generations)
-            if (generation >= MAX_GENERATIONS || (System.currentTimeMillis() - startTime > MAX_TIME_MS)) {
-                System.out.println("Algorithm stopped: Reached max generation or time limit.");
-                break;
-            }
-
-            // Log the best fitness for the current generation
+            // Proceed with evolution
             System.out.printf("Generation %d - Best Fitness: %.2f%n", generation, currentBest.getFitness());
-
             population = evolve(population, reservations, rooms);
             generation++;
+        }
+
+        // Log the reason for stopping after the loop finishes
+        if (stagnationCounter >= MAX_STAGNATION) {
+            System.out.println("Algorithm stopped: Stagnation for " + MAX_STAGNATION + " generations.");
+        } else {
+            System.out.println("Algorithm stopped: Reached max generation or time limit.");
         }
 
         return overallBestSolution;
     }
 
+    /**
+     * Creates the next generation of solutions from the current population.
+     * Uses elitism to keep the best solutions, and applies tournament selection,
+     * crossover, and mutation to generate the rest of the new population.
+     *
+     * @param currentPopulation the current list of schedule solutions
+     * @param reservations the list of reservations
+     * @param rooms the list of available rooms
+     * @return a new list of schedule solutions representing the next generation
+     */
     private List<ScheduleSolution> evolve(List<ScheduleSolution> currentPopulation, List<Reservation> reservations, List<Room> rooms) {
         List<ScheduleSolution> nextGen = new ArrayList<>(POPULATION_SIZE);
 
@@ -87,6 +103,13 @@ public class GeneticOptimizer {
         return nextGen;
     }
 
+    /**
+     * Selects a single solution from the population using tournament selection.
+     * Randomly picks a subset of solutions and returns the one with the highest fitness.
+     *
+     * @param currentPopulation the list of schedule solutions to select from
+     * @return the solution that won the tournament
+     */
     private ScheduleSolution tournamentSelection(List<ScheduleSolution> currentPopulation) {
         ScheduleSolution best = null;
         for (int i = 0; i < TOURNAMENT_SIZE; i++) {
@@ -101,6 +124,15 @@ public class GeneticOptimizer {
         return best;
     }
 
+    /**
+     * Performs a single-point crossover between two parent solutions to produce a child solution.
+     * The child receives a portion of its genes from the first parent and the rest from the second parent.
+     *
+     * @param p1 the first parent solution
+     * @param p2 the second parent solution
+     * @param rooms the list of available rooms used to construct the child solution
+     * @return a new child ScheduleSolution resulting from the crossover
+     */
     private ScheduleSolution crossover(ScheduleSolution p1, ScheduleSolution p2, List<Room> rooms) {
         int cut = ThreadLocalRandom.current().nextInt(p1.getGenes().length);
         int[] childGenes = new int[p1.getGenes().length];
@@ -111,6 +143,14 @@ public class GeneticOptimizer {
         return new ScheduleSolution(childGenes, rooms);
     }
 
+    /**
+     * Generates the initial population of solutions with random room assignments.
+     * Each solution in the population is assigned a random room for every reservation.
+     *
+     * @param reservations the list of reservations to assign
+     * @param rooms the list of available rooms to randomly assign from
+     * @return a sorted list of initially randomized schedule solutions
+     */
     private List<ScheduleSolution> initializePopulation(List<Reservation> reservations, List<Room> rooms) {
         List<ScheduleSolution> initialPopulation = new ArrayList<>(POPULATION_SIZE);
 

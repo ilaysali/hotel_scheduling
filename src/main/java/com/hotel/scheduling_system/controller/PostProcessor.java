@@ -20,6 +20,17 @@ public class PostProcessor {
             double fitnessScore
     ) {}
 
+    /**
+     * Processes the raw genetic algorithm solution to create a final, usable schedule.
+     * It maps the assigned genes (room IDs) back to actual Room objects and checks for
+     * hard constraints (like overlapping dates within the same room). If an assignment
+     * causes a conflict or is invalid, the reservation is moved to the unassigned list.
+     *
+     * @param winningSolution the best schedule solution produced by the genetic algorithm
+     * @param allReservations the list of all reservations to be scheduled
+     * @param rooms the list of all available rooms in the hotel
+     * @return a ProcessingResult containing the final valid room assignments, a list of unassigned reservations, and the fitness score
+     */
     public ProcessingResult process(ScheduleSolution winningSolution, List<Reservation> allReservations, List<Room> rooms) {
 
         // Safety check to prevent indexing errors
